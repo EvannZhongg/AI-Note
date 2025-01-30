@@ -1,132 +1,154 @@
 import tkinter as tk
-from tkinter import filedialog
-from PIL import Image, ImageTk
+from tkinter import filedialog, Menu, font, colorchooser
+from PIL import Image, ImageTk, ImageGrab
+import json
 import os
-import tempfile
 
-class SimpleNotepad:
+SAVE_FILE = "sticky_notes.json"  # 存储便笺的文件
+IMAGE_FOLDER = "sticky_notes_images"  # 存放图片的文件夹
+
+if not os.path.exists(IMAGE_FOLDER):
+    os.makedirs(IMAGE_FOLDER)  # 确保文件夹存在
+
+class StickyNote:
     def __init__(self, root):
         self.root = root
-        self.root.title("简易便笺")
-        self.text_area = tk.Text(self.root, wrap="word", undo=True)  # 启用撤销功能
-        self.text_area.pack(expand=True, fill="both")
+        self.root.title("Windows 便笺")
+        self.root.geometry("300x400")
+        self.root.configure(bg="#1E1E1E")  # 设置暗色背景
+        self.root.overrideredirect(True)  # 移除窗口边框
 
-        # 创建菜单栏
-        self.menu_bar = tk.Menu(self.root)
-        self.root.config(menu=self.menu_bar)
+        # 便笺颜色
+        self.note_bg = "#333333"  # 默认深色模式
+        self.text_fg = "#ffffff"  # 文字颜色
 
-        # 文件菜单
-        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.menu_bar.add_cascade(label="文件", menu=self.file_menu)
-        self.file_menu.add_command(label="新建", command=self.new_file, accelerator="Ctrl+N")
-        self.file_menu.add_command(label="打开", command=self.open_file, accelerator="Ctrl+O")
-        self.file_menu.add_command(label="保存", command=self.save_file, accelerator="Ctrl+S")
-        self.file_menu.add_separator()
-        self.file_menu.add_command(label="退出", command=self.root.quit, accelerator="Ctrl+Q")
+        # 顶部工具栏
+        self.header = tk.Frame(self.root, bg="#FFCC00", height=30)
+        self.header.pack(fill=tk.X, side=tk.TOP)
 
-        # 编辑菜单
-        self.edit_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.menu_bar.add_cascade(label="编辑", menu=self.edit_menu)
-        self.edit_menu.add_command(label="撤销", command=self.text_area.edit_undo, accelerator="Ctrl+Z")
-        self.edit_menu.add_command(label="重做", command=self.text_area.edit_redo, accelerator="Ctrl+Y")
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(label="剪切", command=self.cut, accelerator="Ctrl+X")
-        self.edit_menu.add_command(label="复制", command=self.copy, accelerator="Ctrl+C")
-        self.edit_menu.add_command(label="粘贴", command=self.paste, accelerator="Ctrl+V")
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(label="全选", command=self.select_all, accelerator="Ctrl+A")
-        self.edit_menu.add_command(label="插入图片", command=self.insert_image)
+        # 关闭按钮
+        self.close_btn = tk.Button(self.header, text="X", command=self.close_note, bg="red", fg="white", bd=0, padx=5)
+        self.close_btn.pack(side=tk.RIGHT, padx=5)
 
-        # 绑定快捷键
-        self.root.bind("<Control-n>", lambda event: self.new_file())
-        self.root.bind("<Control-o>", lambda event: self.open_file())
-        self.root.bind("<Control-s>", lambda event: self.save_file())
-        self.root.bind("<Control-q>", lambda event: self.root.quit())
-        self.root.bind("<Control-z>", lambda event: self.text_area.edit_undo())
-        self.root.bind("<Control-y>", lambda event: self.text_area.edit_redo())
-        self.root.bind("<Control-x>", lambda event: self.cut())
-        self.root.bind("<Control-c>", lambda event: self.copy())
-        self.root.bind("<Control-v>", lambda event: self.paste())
-        self.root.bind("<Control-a>", lambda event: self.select_all())
+        # 颜色更改按钮
+        self.color_btn = tk.Button(self.header, text="🎨", command=self.change_color, bg="#FFCC00", fg="black", bd=0)
+        self.color_btn.pack(side=tk.RIGHT, padx=5)
 
-        # 用于存储当前选中的图片
-        self.current_image = None
+        # 插入图片按钮
+        self.image_btn = tk.Button(self.header, text="📷", command=self.insert_image, bg="#FFCC00", fg="black", bd=0)
+        self.image_btn.pack(side=tk.RIGHT, padx=5)
 
-    def new_file(self):
-        self.text_area.delete(1.0, tk.END)
+        # 主要的文本输入框
+        self.text_widget = tk.Text(self.root, wrap="word", font=("Arial", 14), fg=self.text_fg, bg=self.note_bg,
+                                   borderwidth=0, insertbackground="white")
+        self.text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-    def open_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")])
-        if file_path:
-            with open(file_path, "r") as file:
-                self.text_area.delete(1.0, tk.END)
-                self.text_area.insert(1.0, file.read())
+        # 绑定粘贴快捷键
+        self.root.bind("<Control-v>", self.paste)
 
-    def save_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")])
-        if file_path:
-            with open(file_path, "w") as file:
-                file.write(self.text_area.get(1.0, tk.END))
+        # 右键菜单
+        self.menu = Menu(self.root, tearoff=0)
+        self.menu.add_command(label="删除", command=self.close_note)
+        self.text_widget.bind("<Button-3>", self.show_context_menu)
 
-    def cut(self):
-        self.copy()
-        if self.text_area.tag_ranges(tk.SEL):
-            self.text_area.delete(tk.SEL_FIRST, tk.SEL_LAST)
+        # 存储图片引用
+        self.image_refs = []
 
-    def copy(self):
-        if self.text_area.tag_ranges(tk.SEL):
-            try:
-                # 获取选中的图片
-                index = self.text_area.index(tk.SEL_FIRST)
-                image_name = self.text_area.image_names(index)
-                if image_name:
-                    # 将图片保存到临时文件
-                    self.current_image = self.text_area.image_get(image_name)
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_file:
-                        self.current_image.write(tmp_file.name, format="png")
-                        self.root.clipboard_clear()
-                        self.root.clipboard_append(tmp_file.name)
-            except tk.TclError:
-                # 如果没有选中图片，则复制文本
-                self.text_area.event_generate("<<Copy>>")
-        else:
-            self.text_area.event_generate("<<Copy>>")
+        # 读取便笺内容
+        self.load_notes()
 
-    def paste(self):
+    def change_color(self):
+        """更改便笺颜色"""
+        color = colorchooser.askcolor()[1]  # 选择颜色
+        if color:
+            self.note_bg = color
+            self.text_widget.config(bg=self.note_bg)
+
+    def close_note(self):
+        """关闭便笺并保存"""
+        self.save_notes()
+        self.root.destroy()
+
+    def show_context_menu(self, event):
+        """右键菜单"""
+        self.menu.post(event.x_root, event.y_root)
+
+    def paste(self, event=None):
+        """粘贴文本或图片"""
         try:
-            # 尝试从剪切板获取图片路径
             clipboard_content = self.root.clipboard_get()
-            if os.path.exists(clipboard_content):
-                # 插入图片
-                image = Image.open(clipboard_content)
-                image.thumbnail((200, 200))  # 调整图片大小
-                photo = ImageTk.PhotoImage(image)
-                self.text_area.image_create(tk.INSERT, image=photo)
-                self.text_area.image = photo  # 保持对图片的引用
-            else:
-                # 插入文本
-                self.text_area.event_generate("<<Paste>>")
-        except tk.TclError:
-            # 如果剪切板中没有图片，则插入文本
-            self.text_area.event_generate("<<Paste>>")
-
-    def select_all(self):
-        self.text_area.tag_add(tk.SEL, "1.0", tk.END)
-        self.text_area.mark_set(tk.INSERT, "1.0")
-        self.text_area.see(tk.INSERT)
-        return "break"  # 阻止默认行为
+            self.text_widget.insert(tk.INSERT, clipboard_content)
+        except:
+            # 尝试粘贴图片
+            try:
+                image = ImageGrab.grabclipboard()
+                if isinstance(image, Image.Image):
+                    self.insert_pil_image(image)
+            except Exception as e:
+                print("粘贴失败:", e)
 
     def insert_image(self):
-        file_path = filedialog.askopenfilename(filetypes=[("图片文件", "*.png;*.jpg;*.jpeg;*.gif"), ("所有文件", "*.*")])
+        """插入本地图片"""
+        file_path = filedialog.askopenfilename(filetypes=[("图片文件", "*.png;*.jpg;*.jpeg;*.gif")])
         if file_path:
             image = Image.open(file_path)
-            image.thumbnail((200, 200))  # 调整图片大小
-            photo = ImageTk.PhotoImage(image)
-            self.text_area.image_create(tk.END, image=photo)
-            self.text_area.insert(tk.END, "\n")  # 插入换行符
-            self.text_area.image = photo  # 保持对图片的引用，防止被垃圾回收
+            self.insert_pil_image(image, file_path)
+
+    def insert_pil_image(self, image, image_path=None):
+        """将 PIL 图片插入便笺"""
+        image.thumbnail((200, 200))  # 调整大小
+        photo = ImageTk.PhotoImage(image)
+
+        self.image_refs.append(photo)  # 保持引用，防止被垃圾回收
+
+        self.text_widget.image_create(tk.INSERT, image=photo)
+        self.text_widget.insert(tk.INSERT, "\n")  # 插入换行符
+
+        # 保存图片
+        if not image_path:
+            image_path = os.path.join(IMAGE_FOLDER, f"image_{len(self.image_refs)}.png")
+            image.save(image_path)
+
+        # 记录图片路径
+        self.image_refs.append({"image": photo, "path": image_path})
+
+    def save_notes(self):
+        """保存便笺内容和图片路径"""
+        text_content = self.text_widget.get("1.0", tk.END).strip()
+
+        # 获取所有图片路径
+        image_paths = [ref["path"] for ref in self.image_refs if isinstance(ref, dict) and "path" in ref]
+
+        data = [{"text": text_content, "bg": self.note_bg, "images": image_paths}]
+
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+
+    def load_notes(self):
+        """加载便笺内容和图片"""
+        if os.path.exists(SAVE_FILE):
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+                # 处理 `data` 是 `list` 的情况
+                if isinstance(data, list) and data:
+                    latest_note = data[-1]  # 获取最新的便笺数据
+                    self.text_widget.insert("1.0", latest_note.get("text", ""))
+                    self.note_bg = latest_note.get("bg", self.note_bg)
+                    self.text_widget.config(bg=self.note_bg)
+
+                    # 加载图片
+                    if "images" in latest_note:
+                        for img_path in latest_note["images"]:
+                            if os.path.exists(img_path):
+                                image = Image.open(img_path)
+                                self.insert_pil_image(image, img_path)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = SimpleNotepad(root)
+    app = StickyNote(root)
+
+    # 退出时保存
+    root.protocol("WM_DELETE_WINDOW", app.save_notes)
+
     root.mainloop()
