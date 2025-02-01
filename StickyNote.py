@@ -87,6 +87,7 @@ class StickyNote:
         当内容中存在图片标记（格式 [[IMG:<图片路径>]]）时，自动读取并插入图片。
         """
         self.text_widget.delete("1.0", tk.END)
+        # 使用正则表达式拆分文本，奇数项为图片路径
         pattern = r"\[\[IMG:(.*?)\]\]"
         parts = re.split(pattern, content)
         for i, part in enumerate(parts):
@@ -96,7 +97,8 @@ class StickyNote:
                 try:
                     from PIL import Image
                     image = Image.open(part)
-                    self.image_handler.insert_pil_image(image, part)
+                    # 调用时将 add_newline 设为 False，避免重复换行
+                    self.image_handler.insert_pil_image(image, part, add_newline=False)
                 except Exception as e:
                     self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
 
@@ -114,34 +116,123 @@ class StickyNote:
             global_command_queue.put("new")
 
     def show_saved_notes(self):
-        """点击📂按钮后，弹出窗口显示所有已保存便笺（标识和预览），双击可打开"""
-        from note_manager import NoteManager
+        """点击📂按钮后，弹出窗口显示所有已保存便笺，支持重命名（修改原始名称）和删除。
+        若便笺已重命名，则列表中只显示重命名后的名称，不显示原始时间信息。"""
+        from note_manager import NoteManager, SAVE_FILE
         data = NoteManager.load_notes_list()
+
         win = tk.Toplevel(self.root)
         win.title("已保存便笺")
-        win.geometry("400x300")
-        listbox = tk.Listbox(win, width=50)
+        win.geometry("500x350")
+        win.configure(bg="#2B2B2B")
+
+        # 标题标签
+        header_label = tk.Label(win, text="已保存便笺", font=("Helvetica", 16, "bold"),
+                                fg="#FFCC00", bg="#2B2B2B")
+        header_label.pack(pady=(10, 5))
+
+        # 容器 Frame 用于放置 Listbox 与滚动条
+        list_frame = tk.Frame(win, bg="#2B2B2B")
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        listbox = tk.Listbox(list_frame, bg="#3E3E3E", fg="#FFFFFF",
+                             font=("Helvetica", 12), selectbackground="#FFCC00",
+                             activestyle="none", bd=0, highlightthickness=0)
         listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar = tk.Scrollbar(win)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.BOTH)
+
+        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         listbox.config(yscrollcommand=scrollbar.set)
         scrollbar.config(command=listbox.yview)
 
-        for key in sorted(data.keys()):
-            content = data[key]["text"]
-            preview = content[:30] + ("..." if len(content) > 30 else "")
-            listbox.insert(tk.END, f"{key}: {preview}")
+        # 定义一个列表保存每个记录对应的原始键（时间标识）
+        notes_keys = []
 
+        def refresh_list():
+            nonlocal notes_keys
+            notes_keys = []
+            listbox.delete(0, tk.END)
+            data = NoteManager.load_notes_list()
+            for key in sorted(data.keys()):
+                note = data[key]
+                # 预览文本：去除换行并取前30字符
+                content = note["text"].strip().replace("\n", " ")
+                preview = content[:30] + ("..." if len(content) > 30 else "")
+                # 如果已重命名，则仅显示新名称；否则显示原始标识（时间）
+                if "name" in note:
+                    display_label = note["name"]
+                else:
+                    display_label = key
+                notes_keys.append(key)
+                listbox.insert(tk.END, f"{display_label}: {preview}")
+
+        refresh_list()
+
+        # 双击列表项时打开对应便笺窗口
         def open_note(event):
             selection = listbox.curselection()
             if selection:
                 index = selection[0]
-                item = listbox.get(index)
-                note_id = item.split(":")[0]
+                note_id = notes_keys[index]
                 p = multiprocessing.Process(target=launch_sticky_note, args=(note_id, global_command_queue))
                 p.start()
 
         listbox.bind("<Double-Button-1>", open_note)
+
+        # 重命名功能：修改原始名称（时间），更新后列表中仅显示新名称
+        def rename_note():
+            import tkinter.simpledialog as simpledialog
+            selection = listbox.curselection()
+            if not selection:
+                return
+            index = selection[0]
+            note_id = notes_keys[index]
+            data = NoteManager.load_notes_list()
+            # 使用原始标识作为初始值（或当前名称，如果已存在）
+            current_name = data[note_id].get("name", note_id)
+            new_name = simpledialog.askstring("重命名", "请输入新的便笺名称：",
+                                              parent=win, initialvalue=current_name)
+            if new_name:
+                if note_id in data:
+                    data[note_id]["name"] = new_name
+                    import json
+                    with open(SAVE_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+                    refresh_list()
+
+        # 删除功能：确认删除后更新 JSON 并刷新列表显示
+        def delete_note():
+            from tkinter import messagebox
+            selection = listbox.curselection()
+            if not selection:
+                return
+            index = selection[0]
+            note_id = notes_keys[index]
+            if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=win):
+                data = NoteManager.load_notes_list()
+                if note_id in data:
+                    del data[note_id]
+                    import json
+                    with open(SAVE_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+                    refresh_list()
+
+        # 按钮区域
+        btn_frame = tk.Frame(win, bg="#2B2B2B")
+        btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+
+        rename_btn = tk.Button(btn_frame, text="重命名", font=("Helvetica", 12),
+                               bg="#FFCC00", fg="black", command=rename_note)
+        rename_btn.pack(side=tk.LEFT, padx=10)
+
+        delete_btn = tk.Button(btn_frame, text="删除", font=("Helvetica", 12),
+                               bg="#FFCC00", fg="black", command=delete_note)
+        delete_btn.pack(side=tk.LEFT, padx=10)
+
+        close_btn = tk.Button(btn_frame, text="关闭", font=("Helvetica", 12),
+                              bg="#FFCC00", fg="black", command=win.destroy)
+        close_btn.pack(side=tk.RIGHT, padx=10)
+
 
 def launch_sticky_note(note_id=None, command_queue=None):
     global global_command_queue
