@@ -1,3 +1,5 @@
+main.py - 程序的入口文件
+
 QuickNote.py - 主程序
 
 text_shortcuts.py - 文本快捷键功能
