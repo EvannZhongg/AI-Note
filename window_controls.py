@@ -6,7 +6,7 @@ class WindowControls:
         self.bind_controls()
 
     def bind_controls(self):
-        self.app.close_btn.config(command=self.app.hide_window)
+        #self.app.close_btn.config(command=self.app.hide_window)
         self.app.pin_btn.config(command=self.toggle_pin)
         self.app.color_btn.config(command=self.change_color)
         self.app.image_btn.config(command=self.app.image_handler.insert_image)
