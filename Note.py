@@ -26,7 +26,8 @@ class StickyNote:
         self.root.title("便笺")
         self.root.geometry("300x400+100+100")
         self.root.configure(bg="#2B2B2B")
-        self.root.overrideredirect(True)
+        # 使用标准窗口 (False)，让操作系统提供原生最小化、关闭按钮
+        self.root.overrideredirect(False)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
         # 默认使用当前时间（格式：YYYYMMDDHHMMSS）作为便笺标识
@@ -40,15 +41,7 @@ class StickyNote:
         self.header = tk.Frame(self.root, bg=self.header_bg, height=30, relief="flat", bd=0)
         self.header.pack(fill=tk.X, side=tk.TOP)
 
-        # 创建各个按钮
-        self.close_btn = tk.Button(
-            self.header, text="✖", bg="red", fg="white", bd=0, padx=5,
-            font=("Arial", 12, "bold"), command=self.hide_window
-        )
-        self.min_btn = tk.Button(
-            self.header, text="🗕", bg=self.header_bg, fg="black", bd=0,
-            font=("Arial", 12), command=self.minimize_window
-        )
+        # 创建各个按钮（去掉 🗕 和 ✖；保留 📌、🎨、📷、📂、➕、🗑）
         self.pin_btn = tk.Button(
             self.header, text="📌", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
@@ -76,9 +69,21 @@ class StickyNote:
             font=("Arial", 12)
         )
 
+        # ============ 新增 “B” 加粗 和 “I” 斜体按钮 ============
+        self.bold_btn = tk.Button(
+            self.header, text="B", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12, "bold"), command=self.toggle_bold
+        )
+        self.italic_btn = tk.Button(
+            self.header, text="I", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12, "italic"), command=self.toggle_italic
+        )
+
+        # 将所有按钮按顺序 pack 到标题栏
         for btn in [
-            self.close_btn, self.min_btn, self.pin_btn, self.color_btn,
-            self.image_btn, self.list_btn, self.new_btn, self.delete_btn
+            self.pin_btn, self.color_btn, self.image_btn,
+            self.bold_btn, self.italic_btn,  # 新增加粗、斜体
+            self.list_btn, self.new_btn, self.delete_btn
         ]:
             btn.pack(side=tk.RIGHT, padx=5, pady=3)
 
@@ -87,7 +92,7 @@ class StickyNote:
         self.image_handler = ImageHandler(self)
         self.window_controls = WindowControls(self)
 
-        # 仅创建一个文本编辑区域
+        # 创建一个文本编辑区域
         self.text_widget = tk.Text(
             self.root, wrap="word", font=("Arial", 14),
             fg=self.text_fg, bg=self.text_bg,
@@ -95,16 +100,17 @@ class StickyNote:
             relief="flat", padx=10, pady=10
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True)
-        # 配置一个隐藏文本的标签（需要 Tk 8.6 及以上支持）
+        # 隐藏文本标签（需要 Tk 8.6+ 支持）
         self.text_widget.tag_configure("invisible", elide=True)
 
-        # 绑定快捷键管理器，并将 image_handler 传入，供其在粘贴失败时尝试图片粘贴
+        # ========== 配置加粗 / 斜体的文本标签 ==========
+        self.text_widget.tag_configure("bold", font=("Arial", 14, "bold"), foreground=self.text_fg)
+        self.text_widget.tag_configure("italic", font=("Arial", 14, "italic"), foreground=self.text_fg)
+
+        # 绑定快捷键管理器，并将 image_handler 传入
         self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
 
-        # ❌ 不要再绑定 self.root.bind("<Control-v>", self.image_handler.paste)
-        # 全部交给 TextShortcuts.paste() 主导
-
-        # 加载该便笺的内容（包括图片标记，加载后会自动恢复图片）
+        # 加载便笺内容（包括图片标记）
         self.note_manager.load_note()
 
         # 如果需要存储创建的菜单对象，便于重建或销毁，可在此初始化为 None
@@ -116,7 +122,6 @@ class StickyNote:
         当内容中存在图片标记（格式 [[IMG:<图片路径>]]）时，自动读取并插入图片。
         """
         self.text_widget.delete("1.0", tk.END)
-        # 使用正则表达式拆分文本，奇数项为图片路径
         pattern = r"\[\[IMG:(.*?)\]\]"
         parts = re.split(pattern, content)
         for i, part in enumerate(parts):
@@ -137,6 +142,7 @@ class StickyNote:
         self.root.destroy()
 
     def minimize_window(self):
+        """手动最小化窗口方法（保留可用）"""
         self.root.withdraw()
 
     def request_new_sticky_note(self):
@@ -153,38 +159,30 @@ class StickyNote:
         import tkinter.simpledialog as simpledialog
         from tkinter import messagebox
 
-        # 读取已保存的便笺
         data = NoteManager.load_notes_list()
 
-        # 如果之前创建过菜单，先销毁以防重复
         if hasattr(self, "notes_menu") and self.notes_menu:
             self.notes_menu.destroy()
 
-        # 创建一个菜单，指定 tearoff=0 表示去除分割虚线
         self.notes_menu = tk.Menu(
             self.root, tearoff=0,
             bg="#3E3E3E", fg="#FFFFFF",
             activebackground="#FFCC00", activeforeground="black"
         )
 
-        # 如果没有任何便笺记录
         if not data:
             self.notes_menu.add_command(label="暂无便笺", state="disabled")
         else:
-            # 为每个便笺创建子菜单
             for note_id in sorted(data.keys()):
                 note_info = data[note_id]
-                # 如果已重命名则显示新名称，否则显示原始时间 note_id
                 display_label = note_info.get("name", note_id)
 
-                # 创建子菜单
                 sub_menu = tk.Menu(
                     self.notes_menu, tearoff=0,
                     bg="#3E3E3E", fg="#FFFFFF",
                     activebackground="#FFCC00", activeforeground="black"
                 )
 
-                # “打开”
                 def open_note(nid=note_id):
                     p = multiprocessing.Process(
                         target=launch_sticky_note,
@@ -192,7 +190,6 @@ class StickyNote:
                     )
                     p.start()
 
-                # “重命名”
                 def rename_note(nid=note_id):
                     current_name = data[nid].get("name", nid)
                     new_name = simpledialog.askstring(
@@ -203,31 +200,72 @@ class StickyNote:
                         data[nid]["name"] = new_name
                         with open(SAVE_FILE, "w", encoding="utf-8") as f:
                             json.dump(data, f, indent=4, ensure_ascii=False)
-                        # 刷新菜单
                         self.show_saved_notes_menu()
 
-                # “删除”
                 def delete_note(nid=note_id):
                     if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=self.root):
                         if nid in data:
                             del data[nid]
                             with open(SAVE_FILE, "w", encoding="utf-8") as f:
                                 json.dump(data, f, indent=4, ensure_ascii=False)
-                        # 刷新菜单
                         self.show_saved_notes_menu()
 
-                # 添加命令到子菜单
                 sub_menu.add_command(label="打开", command=open_note)
                 sub_menu.add_command(label="重命名", command=rename_note)
                 sub_menu.add_command(label="删除", command=delete_note)
 
-                # 主菜单中以 display_label 显示该便笺的子菜单
                 self.notes_menu.add_cascade(label=display_label, menu=sub_menu)
 
-        # 计算 📂 按钮在屏幕上的坐标，使菜单在按钮下方弹出
         bx = self.list_btn.winfo_rootx()
         by = self.list_btn.winfo_rooty() + self.list_btn.winfo_height()
         self.notes_menu.tk_popup(bx, by)
+
+    # ========== 新增方法：切换加粗 / 切换斜体 ==========
+
+    def toggle_bold(self):
+        """对当前选中的文本加/取消加粗"""
+        try:
+            start = self.text_widget.index("sel.first")
+            end = self.text_widget.index("sel.last")
+        except tk.TclError:
+            return  # 没选中任何文本则不处理
+
+        if self._has_tag_in_range("bold", start, end):
+            # 如果选区内“全部”包含 bold，就移除
+            self.text_widget.tag_remove("bold", start, end)
+        else:
+            # 否则添加 bold
+            self.text_widget.tag_add("bold", start, end)
+
+    def toggle_italic(self):
+        """对当前选中的文本加/取消斜体"""
+        try:
+            start = self.text_widget.index("sel.first")
+            end = self.text_widget.index("sel.last")
+        except tk.TclError:
+            return  # 没选中任何文本则不处理
+
+        if self._has_tag_in_range("italic", start, end):
+            self.text_widget.tag_remove("italic", start, end)
+        else:
+            self.text_widget.tag_add("italic", start, end)
+
+    def _has_tag_in_range(self, tag_name, start, end):
+        """
+        简化处理：若选区内“完全”覆盖在 tag_name 范围，就返回 True，否则 False。
+        实际可实现更精细的检测。
+        """
+        # 获取该 tag 在整个文本中的所有 [start, end) 对
+        ranges = self.text_widget.tag_ranges(tag_name)
+        # ranges 成对出现 (start1, end1, start2, end2, ...)
+        # 只要找到一个 (tag_start, tag_end) 能完全覆盖 [start, end] 即可
+        for i in range(0, len(ranges), 2):
+            tag_start = ranges[i]
+            tag_end = ranges[i+1]
+            if (self.text_widget.compare(tag_start, "<=", start) and
+                self.text_widget.compare(tag_end, ">=", end)):
+                return True
+        return False
 
 
 def launch_sticky_note(note_id=None, command_queue=None):
@@ -236,11 +274,9 @@ def launch_sticky_note(note_id=None, command_queue=None):
     note = StickyNote(note_id=note_id)
     note.root.mainloop()
 
-
 def create_new_sticky_note():
     p = multiprocessing.Process(target=launch_sticky_note, args=(None, global_command_queue))
     p.start()
-
 
 if __name__ == "__main__":
     launch_sticky_note()
