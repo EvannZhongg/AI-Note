@@ -1,9 +1,14 @@
 import tkinter as tk
-
+from PIL import Image, ImageGrab
 
 class TextShortcuts:
-    def __init__(self, text_widget):
+    def __init__(self, text_widget, image_handler=None):
+        """
+        text_widget:  目标文本组件
+        image_handler: 可选，如果要支持图片粘贴，则传入 ImageHandler 的实例
+        """
         self.text_widget = text_widget
+        self.image_handler = image_handler
         self.bind_shortcuts()
 
     def bind_shortcuts(self):
@@ -33,6 +38,7 @@ class TextShortcuts:
     def cut(self, event=None):
         self.copy()
         self.delete_selected()
+        return "break"
 
     def copy(self, event=None):
         try:
@@ -41,13 +47,21 @@ class TextShortcuts:
             self.text_widget.clipboard_append(selected_text)
         except tk.TclError:
             pass
+        return "break"
 
     def paste(self, event=None):
+        """
+        优先尝试获取文本并插入；
+        若剪贴板中没有文本，则尝试调用 image_handler 插入图片。
+        """
         try:
             clipboard_content = self.text_widget.clipboard_get()
             self.text_widget.insert(tk.INSERT, clipboard_content)
         except tk.TclError:
-            pass
+            # 没有文本，尝试粘贴图片
+            if self.image_handler is not None:
+                self.image_handler.handle_image_paste()
+        return "break"
 
     def select_all(self, event=None):
         self.text_widget.tag_add(tk.SEL, "1.0", tk.END)
@@ -130,13 +144,11 @@ class TextShortcuts:
 
         elif key == "BackSpace":
             # 如果是 BackSpace，可能隐藏标记在 delete_index 前面
-            # 先看看 delete_index 是否在某段 invisible 的末尾
             inv_range = widget.tag_prevrange("invisible", delete_index)
             if inv_range and widget.compare(inv_range[1], "==", delete_index):
                 widget.delete(inv_range[0], inv_range[1])
                 return
 
-            # 如果没找到，就再看看是否在 current_insert 位置有 invisible
             inv_range = widget.tag_nextrange("invisible", current_insert)
             if inv_range and widget.compare(inv_range[0], "==", current_insert):
                 widget.delete(inv_range[0], inv_range[1])
