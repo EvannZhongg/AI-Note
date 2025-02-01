@@ -6,12 +6,11 @@ class WindowControls:
         self.bind_controls()
 
     def bind_controls(self):
-        """确保所有按钮都已创建后绑定"""
         self.app.close_btn.config(command=self.app.hide_window)
         self.app.pin_btn.config(command=self.toggle_pin)
         self.app.color_btn.config(command=self.change_color)
         self.app.image_btn.config(command=self.app.image_handler.insert_image)
-        self.app.new_btn.config(command=self.app.note_manager.new_note)  # 现在不会报错
+        # 注意：不要在此处重新绑定 new_btn，保持其在 StickyNote.py 中的原有绑定
         self.app.delete_btn.config(command=self.app.note_manager.delete_note)
 
         # 绑定拖动窗口事件
