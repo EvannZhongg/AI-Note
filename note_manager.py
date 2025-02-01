@@ -13,7 +13,7 @@ class NoteManager:
         """
         保存当前便笺内容：
           仅当文本（包括图片标记）非空时保存；
-          保存内容中会包含图片标记（例如 [[IMG:/path/to/image.png]]）。
+          如果原记录中已存在 "name" 字段，则保留该字段。
         """
         content = self.app.text_widget.get("1.0", tk.END).strip()
         if not content:
@@ -23,12 +23,19 @@ class NoteManager:
         if not isinstance(data, dict):
             data = {}
         note_id_str = str(self.app.note_id)
+        # 尝试获取已有记录中的 "name" 字段
+        existing = data.get(note_id_str, {})
+        name = existing.get("name", None)
+
         data[note_id_str] = {
             "text": content,
             "header_bg": self.app.header_bg
         }
+        if name is not None:
+            data[note_id_str]["name"] = name
+
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+            json.dump(data, f, indent=4, ensure_ascii=False)
 
     def load_note(self):
         """
