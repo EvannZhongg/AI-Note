@@ -10,29 +10,22 @@ class ImageHandler:
         self.app = app
         self.image_refs = []
 
-    def paste(self, event=None):
+    def handle_image_paste(self):
         """
-        处理 Ctrl+V 粘贴操作：
-        1. 尝试获取剪贴板文本，若成功则插入文本；
-        2. 若剪贴板中没有文本，则尝试获取图片，
-           如果检测到图片则将其保存到本地（sticky_notes_images 文件夹下），
-           并调用 insert_pil_image() 插入图片，同时在文本中插入图片标记（但该标记被隐藏）。
+        当外部（text_shortcuts）未能获取文本时，调用此函数尝试粘贴图片。
+        若检测到剪贴板中有图片，则保存并插入到文本中。
         """
         try:
-            clipboard_content = self.app.root.clipboard_get()
-            self.app.text_widget.insert("insert", clipboard_content)
-        except Exception:
-            try:
-                image = ImageGrab.grabclipboard()
-                if isinstance(image, Image.Image):
-                    folder = IMAGE_FOLDER
-                    if not os.path.exists(folder):
-                        os.makedirs(folder)
-                    filename = os.path.join(folder, f"{int(time.time())}.png")
-                    image.save(filename)
-                    self.insert_pil_image(image, filename)
-            except Exception as e:
-                print("粘贴失败:", e)
+            image = ImageGrab.grabclipboard()
+            if isinstance(image, Image.Image):
+                folder = IMAGE_FOLDER
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+                filename = os.path.join(folder, f"{int(time.time())}.png")
+                image.save(filename)
+                self.insert_pil_image(image, filename)
+        except Exception as e:
+            print("粘贴失败(图片):", e)
 
     def insert_image(self):
         """
@@ -45,22 +38,24 @@ class ImageHandler:
 
     def insert_pil_image(self, image, image_path=None, add_newline=True):
         """
-        将 PIL Image 对象转换为 PhotoImage 插入文本中，
-        如果提供了 image_path，则在图片后插入一个特殊标记（格式为 [[IMG:图片路径]]），
+        将 PIL Image 对象转换为 PhotoImage 插入文本中。
+        如果提供了 image_path，则在图片后插入一个特殊标记：[[IMG:路径]]。
         并为该标记添加 "invisible" 标签，使其不显示在窗口中。
 
         参数:
           add_newline: 如果为 True，则在图片后自动插入一个换行符（默认用于粘贴操作）。
-                       如果为 False，则不自动添加换行符（用于从保存内容中加载时）。
+                       如果为 False，则不自动添加换行符（在从保存内容中加载时使用）。
         """
         image.thumbnail((200, 200))
         photo = ImageTk.PhotoImage(image)
         self.image_refs.append(photo)
+
         # 在当前插入点插入图片
         self.app.text_widget.image_create("insert", image=photo)
+
         if image_path:
             marker = f"[[IMG:{image_path}]]"
             self.app.text_widget.insert("insert", marker, ("invisible",))
+
         if add_newline:
             self.app.text_widget.insert("insert", "\n")
-
