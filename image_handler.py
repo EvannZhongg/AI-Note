@@ -43,11 +43,15 @@ class ImageHandler:
             image = Image.open(file_path)
             self.insert_pil_image(image, file_path)
 
-    def insert_pil_image(self, image, image_path=None):
+    def insert_pil_image(self, image, image_path=None, add_newline=True):
         """
         将 PIL Image 对象转换为 PhotoImage 插入文本中，
         如果提供了 image_path，则在图片后插入一个特殊标记（格式为 [[IMG:图片路径]]），
         并为该标记添加 "invisible" 标签，使其不显示在窗口中。
+
+        参数:
+          add_newline: 如果为 True，则在图片后自动插入一个换行符（默认用于粘贴操作）。
+                       如果为 False，则不自动添加换行符（用于从保存内容中加载时）。
         """
         image.thumbnail((200, 200))
         photo = ImageTk.PhotoImage(image)
@@ -56,6 +60,7 @@ class ImageHandler:
         self.app.text_widget.image_create("insert", image=photo)
         if image_path:
             marker = f"[[IMG:{image_path}]]"
-            # 插入 marker 后立即为其添加 "invisible" 标签
             self.app.text_widget.insert("insert", marker, ("invisible",))
-        self.app.text_widget.insert("insert", "\n")
+        if add_newline:
+            self.app.text_widget.insert("insert", "\n")
+
