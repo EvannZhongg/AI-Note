@@ -10,6 +10,8 @@ import json
 
 # 全局命令队列（用于多进程间通知新建便笺）
 global_command_queue = None
+IMAGE_FOLDER = "sticky_notes_images"
+
 
 class StickyNote:
     def __init__(self, note_id=None, master=None):
@@ -96,9 +98,11 @@ class StickyNote:
         # 配置一个隐藏文本的标签（需要 Tk 8.6 及以上支持）
         self.text_widget.tag_configure("invisible", elide=True)
 
-        # 绑定快捷键管理和粘贴事件
-        self.shortcut_manager = TextShortcuts(self.text_widget)
-        self.root.bind("<Control-v>", self.image_handler.paste)
+        # 绑定快捷键管理器，并将 image_handler 传入，供其在粘贴失败时尝试图片粘贴
+        self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
+
+        # ❌ 不要再绑定 self.root.bind("<Control-v>", self.image_handler.paste)
+        # 全部交给 TextShortcuts.paste() 主导
 
         # 加载该便笺的内容（包括图片标记，加载后会自动恢复图片）
         self.note_manager.load_note()
@@ -225,15 +229,18 @@ class StickyNote:
         by = self.list_btn.winfo_rooty() + self.list_btn.winfo_height()
         self.notes_menu.tk_popup(bx, by)
 
+
 def launch_sticky_note(note_id=None, command_queue=None):
     global global_command_queue
     global_command_queue = command_queue
     note = StickyNote(note_id=note_id)
     note.root.mainloop()
 
+
 def create_new_sticky_note():
     p = multiprocessing.Process(target=launch_sticky_note, args=(None, global_command_queue))
     p.start()
+
 
 if __name__ == "__main__":
     launch_sticky_note()
