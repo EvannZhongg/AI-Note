@@ -6,6 +6,7 @@ from window_controls import WindowControls
 import time
 import multiprocessing
 import re
+import json
 
 # 全局命令队列（用于多进程间通知新建便笺）
 global_command_queue = None
@@ -38,27 +39,45 @@ class StickyNote:
         self.header.pack(fill=tk.X, side=tk.TOP)
 
         # 创建各个按钮
-        self.close_btn = tk.Button(self.header, text="✖", bg="red", fg="white", bd=0, padx=5,
-                                   font=("Arial", 12, "bold"), command=self.hide_window)
-        self.min_btn = tk.Button(self.header, text="🗕", bg=self.header_bg, fg="black", bd=0,
-                                 font=("Arial", 12), command=self.minimize_window)
-        self.pin_btn = tk.Button(self.header, text="📌", bg=self.header_bg, fg="black", bd=0,
-                                 font=("Arial", 12))
-        self.color_btn = tk.Button(self.header, text="🎨", bg=self.header_bg, fg="black", bd=0,
-                                   font=("Arial", 12))
-        self.image_btn = tk.Button(self.header, text="📷", bg=self.header_bg, fg="black", bd=0,
-                                   font=("Arial", 12))
-        # 📂 按钮：点击后显示所有已保存的便笺
-        self.list_btn = tk.Button(self.header, text="📂", bg=self.header_bg, fg="black", bd=0,
-                                  font=("Arial", 12), command=self.show_saved_notes)
+        self.close_btn = tk.Button(
+            self.header, text="✖", bg="red", fg="white", bd=0, padx=5,
+            font=("Arial", 12, "bold"), command=self.hide_window
+        )
+        self.min_btn = tk.Button(
+            self.header, text="🗕", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12), command=self.minimize_window
+        )
+        self.pin_btn = tk.Button(
+            self.header, text="📌", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12)
+        )
+        self.color_btn = tk.Button(
+            self.header, text="🎨", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12)
+        )
+        self.image_btn = tk.Button(
+            self.header, text="📷", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12)
+        )
+        # 📂 按钮：点击后弹出菜单，下拉显示所有已保存便笺
+        self.list_btn = tk.Button(
+            self.header, text="📂", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12), command=self.show_saved_notes_menu
+        )
         # ➕ 按钮：点击后通过全局命令队列通知主进程新建便笺
-        self.new_btn = tk.Button(self.header, text="➕", bg=self.header_bg, fg="black", bd=0,
-                                 font=("Arial", 12), command=self.request_new_sticky_note)
-        self.delete_btn = tk.Button(self.header, text="🗑", bg=self.header_bg, fg="black", bd=0,
-                                    font=("Arial", 12))
+        self.new_btn = tk.Button(
+            self.header, text="➕", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12), command=self.request_new_sticky_note
+        )
+        self.delete_btn = tk.Button(
+            self.header, text="🗑", bg=self.header_bg, fg="black", bd=0,
+            font=("Arial", 12)
+        )
 
-        for btn in [self.close_btn, self.min_btn, self.pin_btn, self.color_btn,
-                    self.image_btn, self.list_btn, self.new_btn, self.delete_btn]:
+        for btn in [
+            self.close_btn, self.min_btn, self.pin_btn, self.color_btn,
+            self.image_btn, self.list_btn, self.new_btn, self.delete_btn
+        ]:
             btn.pack(side=tk.RIGHT, padx=5, pady=3)
 
         # 初始化各模块
@@ -67,19 +86,25 @@ class StickyNote:
         self.window_controls = WindowControls(self)
 
         # 仅创建一个文本编辑区域
-        self.text_widget = tk.Text(self.root, wrap="word", font=("Arial", 14),
-                                   fg=self.text_fg, bg=self.text_bg,
-                                   borderwidth=0, insertbackground="white",
-                                   relief="flat", padx=10, pady=10)
+        self.text_widget = tk.Text(
+            self.root, wrap="word", font=("Arial", 14),
+            fg=self.text_fg, bg=self.text_bg,
+            borderwidth=0, insertbackground="white",
+            relief="flat", padx=10, pady=10
+        )
         self.text_widget.pack(fill=tk.BOTH, expand=True)
         # 配置一个隐藏文本的标签（需要 Tk 8.6 及以上支持）
         self.text_widget.tag_configure("invisible", elide=True)
 
+        # 绑定快捷键管理和粘贴事件
         self.shortcut_manager = TextShortcuts(self.text_widget)
         self.root.bind("<Control-v>", self.image_handler.paste)
 
         # 加载该便笺的内容（包括图片标记，加载后会自动恢复图片）
         self.note_manager.load_note()
+
+        # 如果需要存储创建的菜单对象，便于重建或销毁，可在此初始化为 None
+        self.notes_menu = None
 
     def load_content(self, content):
         """
@@ -115,124 +140,90 @@ class StickyNote:
         if global_command_queue is not None:
             global_command_queue.put("new")
 
-    def show_saved_notes(self):
-        """点击📂按钮后，弹出窗口显示所有已保存便笺，支持重命名（修改原始名称）和删除。
-        若便笺已重命名，则列表中只显示重命名后的名称，不显示原始时间信息。"""
+    def show_saved_notes_menu(self, event=None):
+        """
+        点击 📂 按钮后，在当前便笺窗口中弹出一个下拉菜单，
+        其中列出所有已保存的便笺。对每个便笺提供“打开”、“重命名”和“删除”功能。
+        """
         from note_manager import NoteManager, SAVE_FILE
+        import tkinter.simpledialog as simpledialog
+        from tkinter import messagebox
+
+        # 读取已保存的便笺
         data = NoteManager.load_notes_list()
 
-        win = tk.Toplevel(self.root)
-        win.title("已保存便笺")
-        win.geometry("500x350")
-        win.configure(bg="#2B2B2B")
+        # 如果之前创建过菜单，先销毁以防重复
+        if hasattr(self, "notes_menu") and self.notes_menu:
+            self.notes_menu.destroy()
 
-        # 标题标签
-        header_label = tk.Label(win, text="已保存便笺", font=("Helvetica", 16, "bold"),
-                                fg="#FFCC00", bg="#2B2B2B")
-        header_label.pack(pady=(10, 5))
+        # 创建一个菜单，指定 tearoff=0 表示去除分割虚线
+        self.notes_menu = tk.Menu(
+            self.root, tearoff=0,
+            bg="#3E3E3E", fg="#FFFFFF",
+            activebackground="#FFCC00", activeforeground="black"
+        )
 
-        # 容器 Frame 用于放置 Listbox 与滚动条
-        list_frame = tk.Frame(win, bg="#2B2B2B")
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+        # 如果没有任何便笺记录
+        if not data:
+            self.notes_menu.add_command(label="暂无便笺", state="disabled")
+        else:
+            # 为每个便笺创建子菜单
+            for note_id in sorted(data.keys()):
+                note_info = data[note_id]
+                # 如果已重命名则显示新名称，否则显示原始时间 note_id
+                display_label = note_info.get("name", note_id)
 
-        listbox = tk.Listbox(list_frame, bg="#3E3E3E", fg="#FFFFFF",
-                             font=("Helvetica", 12), selectbackground="#FFCC00",
-                             activestyle="none", bd=0, highlightthickness=0)
-        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                # 创建子菜单
+                sub_menu = tk.Menu(
+                    self.notes_menu, tearoff=0,
+                    bg="#3E3E3E", fg="#FFFFFF",
+                    activebackground="#FFCC00", activeforeground="black"
+                )
 
-        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.config(command=listbox.yview)
+                # “打开”
+                def open_note(nid=note_id):
+                    p = multiprocessing.Process(
+                        target=launch_sticky_note,
+                        args=(nid, global_command_queue)
+                    )
+                    p.start()
 
-        # 定义一个列表保存每个记录对应的原始键（时间标识）
-        notes_keys = []
+                # “重命名”
+                def rename_note(nid=note_id):
+                    current_name = data[nid].get("name", nid)
+                    new_name = simpledialog.askstring(
+                        "重命名", "请输入新的便笺名称：",
+                        parent=self.root, initialvalue=current_name
+                    )
+                    if new_name:
+                        data[nid]["name"] = new_name
+                        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=4, ensure_ascii=False)
+                        # 刷新菜单
+                        self.show_saved_notes_menu()
 
-        def refresh_list():
-            nonlocal notes_keys
-            notes_keys = []
-            listbox.delete(0, tk.END)
-            data = NoteManager.load_notes_list()
-            for key in sorted(data.keys()):
-                note = data[key]
-                # 预览文本：去除换行并取前30字符
-                content = note["text"].strip().replace("\n", " ")
-                preview = content[:30] + ("..." if len(content) > 30 else "")
-                # 如果已重命名，则仅显示新名称；否则显示原始标识（时间）
-                if "name" in note:
-                    display_label = note["name"]
-                else:
-                    display_label = key
-                notes_keys.append(key)
-                listbox.insert(tk.END, f"{display_label}: {preview}")
+                # “删除”
+                def delete_note(nid=note_id):
+                    if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=self.root):
+                        if nid in data:
+                            del data[nid]
+                            with open(SAVE_FILE, "w", encoding="utf-8") as f:
+                                json.dump(data, f, indent=4, ensure_ascii=False)
+                        # 刷新菜单
+                        self.show_saved_notes_menu()
 
-        refresh_list()
+                # 添加命令到子菜单
+                sub_menu.add_command(label="打开", command=open_note)
+                sub_menu.add_command(label="重命名", command=rename_note)
+                sub_menu.add_command(label="删除", command=delete_note)
 
-        # 双击列表项时打开对应便笺窗口
-        def open_note(event):
-            selection = listbox.curselection()
-            if selection:
-                index = selection[0]
-                note_id = notes_keys[index]
-                p = multiprocessing.Process(target=launch_sticky_note, args=(note_id, global_command_queue))
-                p.start()
+                # 主菜单中以 display_label 显示该便笺的子菜单
+                self.notes_menu.add_cascade(label=display_label, menu=sub_menu)
 
-        listbox.bind("<Double-Button-1>", open_note)
-
-        # 重命名功能：修改原始名称（时间），更新后列表中仅显示新名称
-        def rename_note():
-            import tkinter.simpledialog as simpledialog
-            selection = listbox.curselection()
-            if not selection:
-                return
-            index = selection[0]
-            note_id = notes_keys[index]
-            data = NoteManager.load_notes_list()
-            # 使用原始标识作为初始值（或当前名称，如果已存在）
-            current_name = data[note_id].get("name", note_id)
-            new_name = simpledialog.askstring("重命名", "请输入新的便笺名称：",
-                                              parent=win, initialvalue=current_name)
-            if new_name:
-                if note_id in data:
-                    data[note_id]["name"] = new_name
-                    import json
-                    with open(SAVE_FILE, "w", encoding="utf-8") as f:
-                        json.dump(data, f, indent=4, ensure_ascii=False)
-                    refresh_list()
-
-        # 删除功能：确认删除后更新 JSON 并刷新列表显示
-        def delete_note():
-            from tkinter import messagebox
-            selection = listbox.curselection()
-            if not selection:
-                return
-            index = selection[0]
-            note_id = notes_keys[index]
-            if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=win):
-                data = NoteManager.load_notes_list()
-                if note_id in data:
-                    del data[note_id]
-                    import json
-                    with open(SAVE_FILE, "w", encoding="utf-8") as f:
-                        json.dump(data, f, indent=4, ensure_ascii=False)
-                    refresh_list()
-
-        # 按钮区域
-        btn_frame = tk.Frame(win, bg="#2B2B2B")
-        btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
-
-        rename_btn = tk.Button(btn_frame, text="重命名", font=("Helvetica", 12),
-                               bg="#FFCC00", fg="black", command=rename_note)
-        rename_btn.pack(side=tk.LEFT, padx=10)
-
-        delete_btn = tk.Button(btn_frame, text="删除", font=("Helvetica", 12),
-                               bg="#FFCC00", fg="black", command=delete_note)
-        delete_btn.pack(side=tk.LEFT, padx=10)
-
-        close_btn = tk.Button(btn_frame, text="关闭", font=("Helvetica", 12),
-                              bg="#FFCC00", fg="black", command=win.destroy)
-        close_btn.pack(side=tk.RIGHT, padx=10)
-
+        # 计算 📂 按钮在屏幕上的坐标，使菜单在按钮下方弹出
+        bx = self.list_btn.winfo_rootx()
+        by = self.list_btn.winfo_rooty() + self.list_btn.winfo_height()
+        self.notes_menu.tk_popup(bx, by)
 
 def launch_sticky_note(note_id=None, command_queue=None):
     global global_command_queue
