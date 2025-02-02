@@ -3,6 +3,7 @@ from text_shortcuts import TextShortcuts
 from note_manager import NoteManager
 from image_handler import ImageHandler
 from window_controls import WindowControls
+from ToolTip import ToolTip  # <-- 新增导入
 import time
 import multiprocessing
 import re
@@ -48,38 +49,52 @@ class StickyNote:
             self.header, text="📌", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
         )
+        ToolTip(self.pin_btn, "固定窗口")
+
         self.color_btn = tk.Button(
             self.header, text="🎨", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
         )
+        ToolTip(self.color_btn, "更改颜色")
+
         self.image_btn = tk.Button(
             self.header, text="📷", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
         )
+        ToolTip(self.image_btn, "插入图片")
+
         # 📂 按钮：点击后弹出菜单，下拉显示所有已保存便笺
         self.list_btn = tk.Button(
             self.header, text="📂", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12), command=self.show_saved_notes_menu
         )
+        ToolTip(self.list_btn, "查看/管理已保存便笺")
+
         # ➕ 按钮：点击后通过全局命令队列通知主进程新便笺
         self.new_btn = tk.Button(
             self.header, text="➕", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12), command=self.request_new_sticky_note
         )
+        ToolTip(self.new_btn, "新建便笺")
+
         self.delete_btn = tk.Button(
             self.header, text="🗑", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
         )
+        ToolTip(self.delete_btn, "删除便笺")
 
         # ============ 新增 “B” 加粗 和 “I” 斜体按钮 ============
         self.bold_btn = tk.Button(
             self.header, text="B", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12, "bold"), command=self.toggle_bold
         )
+        ToolTip(self.bold_btn, "加粗")
+
         self.italic_btn = tk.Button(
             self.header, text="I", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12, "italic"), command=self.toggle_italic
         )
+        ToolTip(self.italic_btn, "斜体")
 
         # 将这些按钮打包到标题栏
         for btn in [
@@ -244,8 +259,6 @@ class StickyNote:
         if has_bi:
             # 如果原本是 bold+italic，现在点加粗 => 取消 bold, 只留 italic
             if not has_italic:
-                # 但 theoretically "has_bi" implies it had italic too
-                # Anyway let's leave italic
                 self.text_widget.tag_add("italic", start, end)
         elif has_bold:
             # 如果原本只有 bold，现在点加粗 => 取消加粗, 不加任何标签
@@ -256,7 +269,6 @@ class StickyNote:
         else:
             # 都没有 => 仅加 bold
             self.text_widget.tag_add("bold", start, end)
-
 
     def toggle_italic(self):
         """ 对当前选区的文本 加/取消 斜体 """
@@ -279,7 +291,6 @@ class StickyNote:
         if has_bi:
             # 如果原本是 bold+italic，现在点斜体 => 只留 bold
             if not has_bold:
-                # 但 theoretically "has_bi" implies it had bold too
                 self.text_widget.tag_add("bold", start, end)
         elif has_italic:
             # 如果原本只有 italic，现在点斜体 => 取消斜体, 无标签
@@ -305,6 +316,28 @@ class StickyNote:
                 return True
         return False
 
+    def load_content(self, content):
+        """
+        根据保存的文本内容加载便笺，
+        当内容中存在图片标记（格式 [[IMG:<图片路径>]]）时，自动读取并插入图片。
+        """
+        self.text_widget.delete("1.0", tk.END)
+
+        pattern = r"\[\[IMG:(.*?)\]\]"
+        parts = re.split(pattern, content)
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                # 普通文本
+                self.text_widget.insert(tk.END, part)
+            else:
+                # part 应该是图片路径
+                try:
+                    from PIL import Image
+                    image = Image.open(part)
+                    # 插入图片到文本
+                    self.image_handler.insert_pil_image(image, part, add_newline=False)
+                except Exception as e:
+                    self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
 
 def launch_sticky_note(note_id=None, command_queue=None):
     global global_command_queue
