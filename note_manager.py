@@ -30,34 +30,26 @@ class NoteManager:
         遍历所有便笺，收集其中的 [[IMG:...]] 路径，与 sticky_notes_images 文件夹下的文件对比，
         如果有文件不在引用列表中，则删除它。
         """
-        from Note import IMAGE_FOLDER  # 确保 StickyNote.py 中定义: IMAGE_FOLDER = "sticky_notes_images"
+        from Note import IMAGE_FOLDER
         data = NoteManager.load_notes_list()
         all_references = set()
 
-        # 收集所有便笺中的图片引用
         pattern = re.compile(r"\[\[IMG:(.*?)\]\]")
         for note_id, note_info in data.items():
             text = note_info.get("text", "")
-            # 找到所有 [[IMG:xxx]] 并加入 all_references
             matches = pattern.findall(text)
             for m in matches:
-                # m 可能是绝对路径或相对路径，先做一下处理
-                # 如果你写入 JSON 时就是绝对路径，则直接使用 os.path.exists(m) 即可
                 possible_abs = os.path.abspath(m)
                 if os.path.exists(possible_abs):
-                    # 如果文件确实存在，就用绝对路径存储到 all_references
                     all_references.add(os.path.abspath(possible_abs))
                 else:
-                    # 如果采用了相对路径（相对于 IMAGE_FOLDER），可以尝试拼接
                     alt_path = os.path.abspath(os.path.join(IMAGE_FOLDER, m))
                     if os.path.exists(alt_path):
                         all_references.add(alt_path)
 
-        # 在文件夹 sticky_notes_images 中逐个文件检查是否依然被引用
         if os.path.exists(IMAGE_FOLDER) and os.path.isdir(IMAGE_FOLDER):
             for f in os.listdir(IMAGE_FOLDER):
                 full_path = os.path.abspath(os.path.join(IMAGE_FOLDER, f))
-                # 如果此文件不在 all_references 中，则删除
                 if full_path not in all_references:
                     try:
                         os.remove(full_path)
@@ -67,11 +59,15 @@ class NoteManager:
 
     def save_note(self):
         """
-        保存便笺内容后，调用 cleanup_unused_images 清理不再使用的图片。
+        1) 获取纯文本（含 [[IMG:...]]）和三种标签区间
+        2) 存入 JSON
+        3) cleanup_unused_images
         """
-        content = self.app.text_widget.get("1.0", tk.END).strip()
-        if not content:
-            # 如果内容为空，则不保存（也可以选择删除已保存的记录）
+        widget = self.app.text_widget
+        content = widget.get("1.0", tk.END).rstrip("\n")
+
+        # 如果文本全空，就不保存
+        if not content.strip():
             return
 
         data = self.load_notes_list()
@@ -82,26 +78,30 @@ class NoteManager:
         existing = data.get(note_id_str, {})
         name = existing.get("name", None)
 
-        # 更新数据
+        # 提取三种标签区间
+        tag_info = {
+            "bold": self._get_tag_ranges(widget, "bold"),
+            "italic": self._get_tag_ranges(widget, "italic"),
+            "bold_italic": self._get_tag_ranges(widget, "bold_italic"),
+        }
+
         data[note_id_str] = {
             "text": content,
-            "header_bg": self.app.header_bg
+            "header_bg": self.app.header_bg,
+            "tag_info": tag_info,
         }
-        # 如果原记录中有 "name"，保留
         if name is not None:
             data[note_id_str]["name"] = name
 
-        # 写入 JSON 文件
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
-        # 保存后清理不再使用的图片
         self.cleanup_unused_images()
 
     def load_note(self):
         """
-        加载便笺内容，调用 app.load_content() 处理文本和图片标记，
-        从而自动恢复之前插入的图片。
+        1) 加载纯文本并插入（这会还原图片位置）
+        2) 若有 tag_info，则重新给相应区间加上 bold/italic/bold_italic
         """
         data = self.load_notes_list()
         if self.app.note_id in data:
@@ -110,10 +110,12 @@ class NoteManager:
             self.app.header_bg = note.get("header_bg", self.app.header_bg)
             self.app.header.config(bg=self.app.header_bg)
 
+            # 还原标签
+            tag_info = note.get("tag_info", {})
+            self._apply_tag_info(self.app.text_widget, tag_info)
+
     def delete_note(self):
-        """
-        删除当前便笺后，调用 cleanup_unused_images 清理不再使用的图片。
-        """
+        """删除当前便笺后，调用 cleanup_unused_images 清理不再使用的图片。"""
         if messagebox.askyesno("删除便笺", "确定删除此便笺吗？"):
             data = self.load_notes_list()
             if self.app.note_id in data:
@@ -121,5 +123,39 @@ class NoteManager:
                 with open(SAVE_FILE, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
             self.app.root.destroy()
-            # 删除后清理不再使用的图片
             self.cleanup_unused_images()
+
+    # ------------------ 以下是提取和还原标签的辅助函数 ------------------
+    def _get_tag_ranges(self, widget, tag_name):
+        """
+        提取 tag_name 在 widget 中的所有区间，
+        返回 [ [start_offset, end_offset], ... ]；使用字符偏移计数
+        """
+        result = []
+        ranges = widget.tag_ranges(tag_name)
+        for i in range(0, len(ranges), 2):
+            start_i = ranges[i]
+            end_i = ranges[i+1]
+            start_off = widget.count("1.0", start_i, "chars")[0]
+            end_off   = widget.count("1.0", end_i,   "chars")[0]
+            # 如果 end_off > start_off，才有效
+            if end_off > start_off:
+                result.append([start_off, end_off])
+        return result
+
+    def _apply_tag_info(self, widget, tag_info):
+        """
+        根据保存的 tag_info 恢复三种标签
+        tag_info 结构:
+        {
+          "bold": [ [start_off, end_off], ... ],
+          "italic": [...],
+          "bold_italic": [...]
+        }
+        """
+        for tag_name, ranges_list in tag_info.items():
+            for (start_off, end_off) in ranges_list:
+                if end_off > start_off:
+                    start_idx = widget.index(f"1.0+{start_off}c")
+                    end_idx   = widget.index(f"1.0+{end_off}c")
+                    widget.tag_add(tag_name, start_idx, end_idx)
