@@ -15,3 +15,5 @@ note_manager.py - 管理便笺的新建、保存、删除、加载
 image_handler.py - 处理图片的插入和粘贴
 
 window_controls.py - 窗口的拖动和颜色修改
+
+ToolTip.py - 鼠标悬浮提示功能
