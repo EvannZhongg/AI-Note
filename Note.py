@@ -23,7 +23,7 @@ class StickyNote:
             self.root = tk.Tk()
         else:
             self.root = tk.Toplevel(master)
-        self.root.title("便笺")
+        self.root.title("Note")
         self.root.geometry("300x400+100+100")
         self.root.configure(bg="#2B2B2B")
         # 使用标准窗口 (False)，让操作系统提供原生最小化、关闭按钮
@@ -41,7 +41,9 @@ class StickyNote:
         self.header = tk.Frame(self.root, bg=self.header_bg, height=30, relief="flat", bd=0)
         self.header.pack(fill=tk.X, side=tk.TOP)
 
-        # 创建各个按钮（去掉 🗕 和 ✖；保留 📌、🎨、📷、📂、➕、🗑）
+        # ============ 工具栏按钮 ============
+
+        # 去掉 🗕 和 ✖ 按钮，保留其余
         self.pin_btn = tk.Button(
             self.header, text="📌", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12)
@@ -59,7 +61,7 @@ class StickyNote:
             self.header, text="📂", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12), command=self.show_saved_notes_menu
         )
-        # ➕ 按钮：点击后通过全局命令队列通知主进程新建便笺
+        # ➕ 按钮：点击后通过全局命令队列通知主进程新便笺
         self.new_btn = tk.Button(
             self.header, text="➕", bg=self.header_bg, fg="black", bd=0,
             font=("Arial", 12), command=self.request_new_sticky_note
@@ -79,70 +81,66 @@ class StickyNote:
             font=("Arial", 12, "italic"), command=self.toggle_italic
         )
 
-        # 将所有按钮按顺序 pack 到标题栏
+        # 将这些按钮打包到标题栏
         for btn in [
             self.pin_btn, self.color_btn, self.image_btn,
-            self.bold_btn, self.italic_btn,  # 新增加粗、斜体
+            self.bold_btn, self.italic_btn,  # 新增
             self.list_btn, self.new_btn, self.delete_btn
         ]:
             btn.pack(side=tk.RIGHT, padx=5, pady=3)
 
-        # 初始化各模块
+        # ============ 初始化各模块 ============
         self.note_manager = NoteManager(self)
         self.image_handler = ImageHandler(self)
         self.window_controls = WindowControls(self)
 
-        # 创建一个文本编辑区域
+        # ============ 创建文本编辑区域 ============
         self.text_widget = tk.Text(
-            self.root, wrap="word", font=("Arial", 14),
+            self.root, wrap="word",
+            font=("微软雅黑", 11),  # 统一改成 "微软雅黑" 11号
             fg=self.text_fg, bg=self.text_bg,
             borderwidth=0, insertbackground="white",
             relief="flat", padx=10, pady=10
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True)
-        # 隐藏文本标签（需要 Tk 8.6+ 支持）
+
+        # 隐藏文本标签（若多行，不想显示的文本可以 `tag_add("invisible", ...)`）
         self.text_widget.tag_configure("invisible", elide=True)
 
-        # ========== 配置加粗 / 斜体的文本标签 ==========
-        self.text_widget.tag_configure("bold", font=("Arial", 14, "bold"), foreground=self.text_fg)
-        self.text_widget.tag_configure("italic", font=("Arial", 14, "italic"), foreground=self.text_fg)
+        # ============ 配置标签 ============
+
+        # 1) 加粗
+        self.text_widget.tag_configure("bold",
+            font=("微软雅黑", 11, "bold"),
+            foreground=self.text_fg
+        )
+        # 2) 斜体
+        self.text_widget.tag_configure("italic",
+            font=("微软雅黑", 11, "italic"),
+            foreground=self.text_fg
+        )
+        # 3) 既加粗又斜体
+        self.text_widget.tag_configure("bold_italic",
+            font=("微软雅黑", 11, "bold", "italic"),
+            foreground=self.text_fg
+        )
 
         # 绑定快捷键管理器，并将 image_handler 传入
         self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
 
-        # 加载便笺内容（包括图片标记）
+        # 加载当前便笺内容
         self.note_manager.load_note()
 
-        # 如果需要存储创建的菜单对象，便于重建或销毁，可在此初始化为 None
+        # 存储自定义菜单对象
         self.notes_menu = None
 
-    def load_content(self, content):
-        """
-        根据保存的文本内容加载便笺，
-        当内容中存在图片标记（格式 [[IMG:<图片路径>]]）时，自动读取并插入图片。
-        """
-        self.text_widget.delete("1.0", tk.END)
-        pattern = r"\[\[IMG:(.*?)\]\]"
-        parts = re.split(pattern, content)
-        for i, part in enumerate(parts):
-            if i % 2 == 0:
-                self.text_widget.insert(tk.END, part)
-            else:
-                try:
-                    from PIL import Image
-                    image = Image.open(part)
-                    # 调用时将 add_newline 设为 False，避免重复换行
-                    self.image_handler.insert_pil_image(image, part, add_newline=False)
-                except Exception as e:
-                    self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
-
+    # -----------------------------------------------------------
+    # 当关闭窗口时，自动保存
     def hide_window(self):
-        """窗口关闭时自动保存内容（仅当内容不为空时），然后关闭窗口"""
         self.note_manager.save_note()
         self.root.destroy()
 
     def minimize_window(self):
-        """手动最小化窗口方法（保留可用）"""
         self.root.withdraw()
 
     def request_new_sticky_note(self):
@@ -150,17 +148,14 @@ class StickyNote:
         if global_command_queue is not None:
             global_command_queue.put("new")
 
+    # -----------------------------------------------------------
+    # 列出已保存的便笺功能，不变
     def show_saved_notes_menu(self, event=None):
-        """
-        点击 📂 按钮后，在当前便笺窗口中弹出一个下拉菜单，
-        其中列出所有已保存的便笺。对每个便笺提供“打开”、“重命名”和“删除”功能。
-        """
         from note_manager import NoteManager, SAVE_FILE
         import tkinter.simpledialog as simpledialog
         from tkinter import messagebox
 
         data = NoteManager.load_notes_list()
-
         if hasattr(self, "notes_menu") and self.notes_menu:
             self.notes_menu.destroy()
 
@@ -220,45 +215,88 @@ class StickyNote:
         by = self.list_btn.winfo_rooty() + self.list_btn.winfo_height()
         self.notes_menu.tk_popup(bx, by)
 
-    # ========== 新增方法：切换加粗 / 切换斜体 ==========
+    # -----------------------------------------------------------
+    # 区分三种标签: "bold", "italic", "bold_italic"
+    #
+    # 若文字已有 italic，但想加粗 => 切换成 bold_italic
+    # 若文字已有 bold_italic，再点加粗 => 去掉 bold_italic, 仅留 italic
+    # 依此类推
+    # -----------------------------------------------------------
 
     def toggle_bold(self):
-        """对当前选中的文本加/取消加粗"""
+        """ 对当前选区的文本 加/取消 加粗 """
         try:
             start = self.text_widget.index("sel.first")
             end = self.text_widget.index("sel.last")
         except tk.TclError:
-            return  # 没选中任何文本则不处理
+            return  # 没选中任何文本
 
-        if self._has_tag_in_range("bold", start, end):
-            # 如果选区内“全部”包含 bold，就移除
-            self.text_widget.tag_remove("bold", start, end)
+        has_bold = self._has_tag_in_range("bold", start, end)
+        has_italic = self._has_tag_in_range("italic", start, end)
+        has_bi = self._has_tag_in_range("bold_italic", start, end)
+
+        # 优先移除原有标签
+        self.text_widget.tag_remove("bold", start, end)
+        self.text_widget.tag_remove("italic", start, end)
+        self.text_widget.tag_remove("bold_italic", start, end)
+
+        # 判断当前是否要加粗
+        if has_bi:
+            # 如果原本是 bold+italic，现在点加粗 => 取消 bold, 只留 italic
+            if not has_italic:
+                # 但 theoretically "has_bi" implies it had italic too
+                # Anyway let's leave italic
+                self.text_widget.tag_add("italic", start, end)
+        elif has_bold:
+            # 如果原本只有 bold，现在点加粗 => 取消加粗, 不加任何标签
+            pass
+        elif has_italic:
+            # 如果原本只有 italic，现在加粗 => bold+italic
+            self.text_widget.tag_add("bold_italic", start, end)
         else:
-            # 否则添加 bold
+            # 都没有 => 仅加 bold
             self.text_widget.tag_add("bold", start, end)
 
+
     def toggle_italic(self):
-        """对当前选中的文本加/取消斜体"""
+        """ 对当前选区的文本 加/取消 斜体 """
         try:
             start = self.text_widget.index("sel.first")
             end = self.text_widget.index("sel.last")
         except tk.TclError:
-            return  # 没选中任何文本则不处理
+            return
 
-        if self._has_tag_in_range("italic", start, end):
-            self.text_widget.tag_remove("italic", start, end)
+        has_bold = self._has_tag_in_range("bold", start, end)
+        has_italic = self._has_tag_in_range("italic", start, end)
+        has_bi = self._has_tag_in_range("bold_italic", start, end)
+
+        # 先移除原有标签
+        self.text_widget.tag_remove("bold", start, end)
+        self.text_widget.tag_remove("italic", start, end)
+        self.text_widget.tag_remove("bold_italic", start, end)
+
+        # 判断当前是否要斜体
+        if has_bi:
+            # 如果原本是 bold+italic，现在点斜体 => 只留 bold
+            if not has_bold:
+                # 但 theoretically "has_bi" implies it had bold too
+                self.text_widget.tag_add("bold", start, end)
+        elif has_italic:
+            # 如果原本只有 italic，现在点斜体 => 取消斜体, 无标签
+            pass
+        elif has_bold:
+            # 如果原本只有 bold，现在斜体 => bold+italic
+            self.text_widget.tag_add("bold_italic", start, end)
         else:
+            # 都没有 => 仅加 italic
             self.text_widget.tag_add("italic", start, end)
 
     def _has_tag_in_range(self, tag_name, start, end):
         """
-        简化处理：若选区内“完全”覆盖在 tag_name 范围，就返回 True，否则 False。
-        实际可实现更精细的检测。
+        如果选区 [start, end) 整段都处于 tag_name 中，返回 True，否则 False。
+        简化逻辑：只要找到 (tag_start, tag_end) 覆盖了此区间即可
         """
-        # 获取该 tag 在整个文本中的所有 [start, end) 对
         ranges = self.text_widget.tag_ranges(tag_name)
-        # ranges 成对出现 (start1, end1, start2, end2, ...)
-        # 只要找到一个 (tag_start, tag_end) 能完全覆盖 [start, end] 即可
         for i in range(0, len(ranges), 2):
             tag_start = ranges[i]
             tag_end = ranges[i+1]
