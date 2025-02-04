@@ -4,7 +4,7 @@ from note_manager import NoteManager
 from image_handler import ImageHandler
 from window_controls import WindowControls
 from ToolTip import ToolTip  # 悬浮提示
-from AI import AIChat  # 引入 AI 模块
+from AI import AIChat, load_config, save_config  # 引入 AI 模块及配置函数
 import time
 import multiprocessing
 import re
@@ -14,68 +14,44 @@ global_command_queue = None
 IMAGE_FOLDER = "sticky_notes_images"
 
 def launch_sticky_note(note_id=None, command_queue=None, x=None, y=None):
-    """
-    允许接收 x,y 参数以指定窗口初始位置；
-    若 x,y 均为 None，则使用默认 '300x400+100+100'。
-    """
     global global_command_queue
     global_command_queue = command_queue
     note = StickyNote(note_id=note_id, x=x, y=y)
     note.root.mainloop()
 
 def create_new_sticky_note():
-    """只想创建默认位置的新便笺时使用"""
     p = multiprocessing.Process(target=launch_sticky_note, args=(None, global_command_queue))
     p.start()
 
-
 class StickyNote:
     def __init__(self, note_id=None, master=None, x=None, y=None):
-        """
-        master: 可选父窗口 (通常不用)；
-        x, y: 当不为 None 时，用于覆盖默认位置。
-        """
         if master is None:
             self.root = tk.Tk()
         else:
             self.root = tk.Toplevel(master)
-
         self.root.title("FakeNote")
-        # 如果传入 x, y，则覆盖默认位置；否则使用 "300x400+100+100"
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
         else:
             geometry_str = "300x400+100+100"
         self.root.geometry(geometry_str)
-
-        # 使用 grid 布局划分三个区域：顶部工具栏、内容区、底部工具栏
-        self.root.grid_rowconfigure(1, weight=1)  # 内容区行可扩展
+        self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
-
-        # 主背景色
         self.root.configure(bg="#1E1E1E")
         self.root.overrideredirect(False)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-
-        # 便笺标识
         self.note_id = note_id or time.strftime("%Y%m%d%H%M%S", time.localtime())
-
-        # 现代配色
         self.header_bg = "#3F51B5"
         self.text_bg = "#2B2B2B"
         self.text_fg = "#ECECEC"
-
         self.is_pinned = False
-        self.is_ai_mode = False  # AI 模式状态
-
+        self.is_ai_mode = False
         button_fg = "#FFFFFF"
         button_font = ("Segoe UI", 11, "bold")
-
-        # ============ 顶部工具栏 ============
+        # 顶部工具栏
         self.header = tk.Frame(self.root, bg=self.header_bg, height=30, relief="flat", bd=0)
         self.header.grid(row=0, column=0, sticky="ew")
-        self.header.grid_propagate(False)  # 固定高度
-
+        self.header.grid_propagate(False)
         self.pin_btn = tk.Button(self.header, text="📌", bg=self.header_bg, fg=button_fg, bd=0, font=button_font)
         ToolTip(self.pin_btn, "固定窗口")
         self.color_btn = tk.Button(self.header, text="🎨", bg=self.header_bg, fg=button_fg, bd=0, font=button_font)
@@ -96,24 +72,17 @@ class StickyNote:
         self.italic_btn = tk.Button(self.header, text="I", bg=self.header_bg, fg=button_fg, bd=0,
                                     font=("Segoe UI", 11, "italic"), command=self.toggle_italic)
         ToolTip(self.italic_btn, "斜体")
-
-        # 从右向左依次排列顶部按钮
         for btn in [self.pin_btn, self.color_btn, self.image_btn,
                     self.bold_btn, self.italic_btn,
                     self.list_btn, self.new_btn, self.delete_btn]:
             btn.pack(side=tk.RIGHT, padx=5, pady=3)
-
-        # ============ 初始化模块 ============
+        # 初始化模块
         self.note_manager = NoteManager(self)
         self.image_handler = ImageHandler(self)
         self.window_controls = WindowControls(self)
-
-        # ============ 内容区域 ============
-        # 使用 content_frame 作为中间区域容器，供文本编辑区和 AI 聊天区互斥显示
+        # 内容区域
         self.content_frame = tk.Frame(self.root, bg=self.text_bg)
         self.content_frame.grid(row=1, column=0, sticky="nsew")
-
-        # 创建文本编辑区（默认显示）
         self.text_widget = tk.Text(self.content_frame, wrap="word",
                                     font=("微软雅黑", 11),
                                     fg=self.text_fg, bg=self.text_bg,
@@ -127,8 +96,7 @@ class StickyNote:
         self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
         self.note_manager.load_note()
         self.notes_menu = None
-
-        # ============ AI 聊天区域（默认隐藏） ============
+        # AI 聊天区域（默认隐藏）
         self.ai_frame = tk.Frame(self.content_frame, bg=self.text_bg)
         self.ai_chat_display = tk.Text(self.ai_frame, wrap="word", height=10,
                                        font=("微软雅黑", 10), fg=self.text_fg,
@@ -146,37 +114,36 @@ class StickyNote:
                                         command=self.send_message, bg=self.header_bg, fg="white")
         self.ai_send_button.pack(side=tk.RIGHT)
         self.ai_chat = AIChat()
-
-        # ============ 底部工具栏 ============
+        # 底部工具栏
         self.toolbar = tk.Frame(self.root, bg=self.header_bg, height=30)
         self.toolbar.grid(row=2, column=0, sticky="ew")
-        self.toolbar.grid_propagate(False)  # 固定高度
-        # 底部工具栏样式与顶部工具栏一致，添加 AI 切换按钮仅显示图标 🤖
+        self.toolbar.grid_propagate(False)
+        # AI 切换按钮（仅图标），外观与顶部按钮一致（flat，无边框）
         self.ai_toggle_btn = tk.Button(self.toolbar, text="🤖", command=self.toggle_ai_mode,
-                                       bg=self.header_bg, fg="white", font=button_font, relief="flat", bd=0)
+                                       bg=self.header_bg, fg="white", font=button_font,
+                                       relief="flat", bd=0)
         self.ai_toggle_btn.pack(side=tk.LEFT, padx=10, pady=3)
-
+        # 右键弹出设置菜单，用于配置 AI 参数和 prompt 多套设置
+        self.root.bind("<Button-3>", self.show_settings_menu)
         self.root.lift()
         self.root.attributes("-topmost", True)
         self.root.after(100, self._ensure_topmost_state)
 
     def _darken_color(self, hexcolor, factor=0.7):
-        """返回加深后的颜色字符串，与 pinned 按钮逻辑一致"""
         hexcolor = hexcolor.lstrip('#')
         r = int(hexcolor[0:2], 16)
         g = int(hexcolor[2:4], 16)
         b = int(hexcolor[4:6], 16)
         import colorsys
-        (h, s, v) = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        (h, s, v) = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
         v = v * factor
         (r2, g2, b2) = colorsys.hsv_to_rgb(h, s, v)
-        r2 = int(r2 * 255)
-        g2 = int(g2 * 255)
-        b2 = int(b2 * 255)
+        r2 = int(r2*255)
+        g2 = int(g2*255)
+        b2 = int(b2*255)
         return f"#{r2:02x}{g2:02x}{b2:02x}"
 
     def toggle_ai_mode(self):
-        """切换 AI 模式（仅切换内容区域显示），并更新 AI 按钮背景颜色，逻辑与固定窗口按钮一致"""
         self.is_ai_mode = not self.is_ai_mode
         if self.is_ai_mode:
             self.text_widget.pack_forget()
@@ -201,7 +168,6 @@ class StickyNote:
         self.ai_chat.get_response(user_message, self.display_response)
 
     def display_response(self, ai_response):
-        """更新 AI 对话框"""
         self.root.after(0, self._update_chat_display, ai_response)
 
     def _update_chat_display(self, ai_response):
@@ -215,29 +181,24 @@ class StickyNote:
         self.root.destroy()
 
     def _ensure_topmost_state(self):
-        """如果没有固定，则关闭 topmost；否则保持"""
         if not self.is_pinned:
             self.root.attributes("-topmost", False)
         else:
             self.root.attributes("-topmost", True)
 
     def _refresh_header_buttons(self):
-        """
-        当 header_bg 改变后，刷新所有标题栏按钮的背景；
-        若窗口被固定，则加深 pin 按钮的背景色。
-        """
         def _darken_color(hexcolor, factor=0.7):
             hexcolor = hexcolor.lstrip('#')
             r = int(hexcolor[0:2], 16)
             g = int(hexcolor[2:4], 16)
             b = int(hexcolor[4:6], 16)
             import colorsys
-            (h, s, v) = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+            (h, s, v) = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
             v = v * factor
             (r2, g2, b2) = colorsys.hsv_to_rgb(h, s, v)
-            r2 = int(r2 * 255)
-            g2 = int(g2 * 255)
-            b2 = int(b2 * 255)
+            r2 = int(r2*255)
+            g2 = int(g2*255)
+            b2 = int(b2*255)
             return f"#{r2:02x}{g2:02x}{b2:02x}"
         all_buttons = [self.pin_btn, self.color_btn, self.image_btn,
                        self.bold_btn, self.italic_btn,
@@ -329,6 +290,217 @@ class StickyNote:
         by = self.list_btn.winfo_rooty() + self.list_btn.winfo_height()
         self.notes_menu.tk_popup(bx, by)
 
+    def _has_tag_in_range(self, tag_name, start, end):
+        ranges = self.text_widget.tag_ranges(tag_name)
+        for i in range(0, len(ranges), 2):
+            tag_start = ranges[i]
+            tag_end = ranges[i + 1]
+            if (self.text_widget.compare(tag_start, "<=", start) and
+                    self.text_widget.compare(tag_end, ">=", end)):
+                return True
+        return False
+
+    def show_settings_menu(self, event):
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="AI 设置", command=self.open_ai_settings)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def open_ai_settings(self):
+        """打开 AI 设置对话框，配置 API、模型以及多套 prompt（system 和 user 部分）。
+        下拉列表中固定显示“聊天”和“新建模板”，后续追加其它模板；
+        当点击模板时，显示二级子菜单【应用】、【重命名】、【删除】选项，
+        其中默认模板“聊天”的 prompt 为空且禁止修改；
+        如果用户点击只读的编辑框，则自动转到“新建模板”；
+        保存时如果选择“新建模板”，则弹出对话框要求输入模板名称，否则直接覆盖保存当前模板内容。
+        同时新增“Model”填写框，其值保存到配置文件和 .env 文件。"""
+        settings_win = tk.Toplevel(self.root)
+        settings_win.title("AI 设置")
+        settings_win.geometry("530x280")
+        settings_win.transient(self.root)
+        settings_win.grab_set()
+        settings_win.configure(bg=self.text_bg)
+
+        # 统一字体和颜色设置
+        label_font = ("微软雅黑", 11)
+        entry_font = ("微软雅黑", 11)
+        btn_font = ("Segoe UI", 11, "bold")
+        label_fg = self.text_fg
+        entry_bg = self.text_bg
+        entry_fg = self.text_fg
+
+        config = load_config()
+
+        tk.Label(settings_win, text="API URL:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=0, column=0, padx=10, pady=5, sticky="e")
+        api_url_var = tk.StringVar(value=config.get("api_url", ""))
+        tk.Entry(settings_win, textvariable=api_url_var, width=40, font=entry_font,
+                 bg=entry_bg, fg=entry_fg, insertbackground=entry_fg) \
+            .grid(row=0, column=1, padx=10, pady=5)
+
+        tk.Label(settings_win, text="API Key:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        api_key_var = tk.StringVar(value=config.get("api_key", ""))
+        tk.Entry(settings_win, textvariable=api_key_var, width=40, font=entry_font,
+                 bg=entry_bg, fg=entry_fg, insertbackground=entry_fg, show="*") \
+            .grid(row=1, column=1, padx=10, pady=5)
+
+        tk.Label(settings_win, text="Model:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=2, column=0, padx=10, pady=5, sticky="e")
+        model_var = tk.StringVar(value=config.get("model", ""))
+        tk.Entry(settings_win, textvariable=model_var, width=40, font=entry_font,
+                 bg=entry_bg, fg=entry_fg, insertbackground=entry_fg) \
+            .grid(row=2, column=1, padx=10, pady=5)
+
+        # 处理 prompt 配置
+        prompts_dict = config.get("prompts", {})
+        if "聊天" not in prompts_dict:
+            prompts_dict["聊天"] = {"system": "", "user": ""}
+        other_prompts = sorted([name for name in prompts_dict.keys() if name != "聊天"])
+        prompt_names = ["聊天", "新建模板"] + other_prompts
+
+        active_prompt_initial = config.get("active_prompt", "聊天")
+        if active_prompt_initial not in prompt_names:
+            active_prompt_initial = "聊天"
+        active_prompt_var = tk.StringVar(value=active_prompt_initial)
+
+        tk.Label(settings_win, text="选择已有模板:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=3, column=0, padx=10, pady=5, sticky="e")
+        # 使用 Menubutton显示模板（始终保持默认背景样式）
+        menubtn = tk.Menubutton(settings_win, textvariable=active_prompt_var, relief="raised", width=30,
+                                font=entry_font, bg=self.header_bg, fg=label_fg)
+        menubtn.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+        menu = tk.Menu(menubtn, tearoff=0, bg=self.header_bg, fg=label_fg, font=entry_font)
+        menubtn.config(menu=menu)
+
+        def create_template_submenu(name):
+            sub_menu = tk.Menu(menu, tearoff=0, bg=self.header_bg, fg=label_fg, font=entry_font)
+
+            def apply_template():
+                active_prompt_var.set(name)
+                if name == "聊天":
+                    system_var.set("")
+                    user_var.set("")
+                    system_entry.config(state="disabled", disabledbackground=entry_bg)
+                    user_entry.config(state="disabled", disabledbackground=entry_bg)
+                else:
+                    system_entry.config(state="normal")
+                    user_entry.config(state="normal")
+                    system_val = prompts_dict.get(name, {}).get("system", "")
+                    user_val = prompts_dict.get(name, {}).get("user", "")
+                    system_var.set(system_val)
+                    user_var.set(user_val)
+
+            def rename_template():
+                from tkinter import simpledialog, messagebox
+                if name in ["聊天", "新建模板"]:
+                    messagebox.showerror("错误", "默认模板不能重命名！", parent=settings_win)
+                    return
+                new_name = simpledialog.askstring("重命名模板", "请输入新的模板名称：", parent=settings_win)
+                if new_name:
+                    new_name = new_name.strip()
+                    if new_name in prompts_dict and new_name != name:
+                        messagebox.showerror("错误", "该模板名称已存在！", parent=settings_win)
+                        return
+                    prompts_dict[new_name] = prompts_dict.pop(name)
+                    active_prompt_var.set(new_name)
+                    rebuild_menu()
+                    messagebox.showinfo("重命名成功", f"模板已重命名为 '{new_name}'", parent=settings_win)
+
+            def delete_template():
+                from tkinter import messagebox
+                if name in ["聊天", "新建模板"]:
+                    messagebox.showerror("错误", "默认模板不能删除！", parent=settings_win)
+                    return
+                if messagebox.askyesno("删除模板", f"确定删除模板 '{name}'？", parent=settings_win):
+                    prompts_dict.pop(name, None)
+                    rebuild_menu()
+                    active_prompt_var.set("聊天")
+                    messagebox.showinfo("删除成功", f"模板 '{name}' 已删除。", parent=settings_win)
+
+            sub_menu.add_command(label="应用", command=apply_template)
+            sub_menu.add_command(label="重命名", command=rename_template)
+            sub_menu.add_command(label="删除", command=delete_template)
+            return sub_menu
+
+        def rebuild_menu():
+            menu.delete(0, "end")
+            for fixed in ["聊天", "新建模板"]:
+                menu.add_command(label=fixed, command=lambda n=fixed: active_prompt_var.set(n))
+            others = sorted([name for name in prompts_dict.keys() if name not in ["聊天"]])
+            for name in others:
+                menu.add_cascade(label=name, menu=create_template_submenu(name))
+
+        rebuild_menu()
+
+        def on_prompt_select(*args):
+            name = active_prompt_var.get()
+            if name == "聊天":
+                system_var.set("")
+                user_var.set("")
+                system_entry.config(state="disabled", disabledbackground=entry_bg)
+                user_entry.config(state="disabled", disabledbackground=entry_bg)
+            else:
+                system_entry.config(state="normal")
+                user_entry.config(state="normal")
+                system_val = prompts_dict.get(name, {}).get("system", "")
+                user_val = prompts_dict.get(name, {}).get("user", "")
+                system_var.set(system_val)
+                user_var.set(user_val)
+
+        active_prompt_var.trace("w", on_prompt_select)
+
+        tk.Label(settings_win, text="System Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=4, column=0, padx=10, pady=5, sticky="e")
+        system_var = tk.StringVar(value=prompts_dict.get(active_prompt_var.get(), {}).get("system", ""))
+        system_entry = tk.Entry(settings_win, textvariable=system_var, width=40, font=entry_font,
+                                bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
+        system_entry.grid(row=4, column=1, padx=10, pady=5)
+        tk.Label(settings_win, text="User Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
+            .grid(row=5, column=0, padx=10, pady=5, sticky="e")
+        user_var = tk.StringVar(value=prompts_dict.get(active_prompt_var.get(), {}).get("user", ""))
+        user_entry = tk.Entry(settings_win, textvariable=user_var, width=40, font=entry_font,
+                              bg=entry_bg, fg=entry_fg, insertbackground=entry_fg)
+        user_entry.grid(row=5, column=1, padx=10, pady=5)
+
+        def switch_to_new(event):
+            if active_prompt_var.get() == "聊天":
+                active_prompt_var.set("新建模板")
+                system_entry.config(state="normal")
+                user_entry.config(state="normal")
+
+        system_entry.bind("<Button-1>", switch_to_new)
+        user_entry.bind("<Button-1>", switch_to_new)
+
+        def save_settings():
+            new_config = {
+                "api_url": api_url_var.get().strip(),
+                "api_key": api_key_var.get().strip(),
+                "model": model_var.get().strip(),
+                "prompts": prompts_dict
+            }
+            chosen_prompt = active_prompt_var.get().strip()
+            new_system = system_var.get().strip()
+            new_user = user_var.get().strip()
+            from tkinter import simpledialog, messagebox
+            if chosen_prompt == "新建模板" or not chosen_prompt:
+                new_name = simpledialog.askstring("保存模板", "请输入保存的 Prompt 模板名称：", parent=settings_win)
+                if not new_name:
+                    messagebox.showerror("错误", "模板名称不能为空！", parent=settings_win)
+                    return
+                chosen_prompt = new_name.strip()
+            if chosen_prompt == "聊天":
+                new_system = ""
+                new_user = ""
+            new_config["prompts"][chosen_prompt] = {"system": new_system, "user": new_user}
+            new_config["active_prompt"] = chosen_prompt
+            save_config(new_config)
+            self.ai_chat.update_config(new_config)
+            settings_win.destroy()
+
+        tk.Button(settings_win, text="保存", font=btn_font, command=save_settings,
+                  bg=self.header_bg, fg=label_fg) \
+            .grid(row=7, column=0, columnspan=3, pady=15)
+
     def toggle_bold(self):
         try:
             start = self.text_widget.index("sel.first")
@@ -372,16 +544,6 @@ class StickyNote:
             self.text_widget.tag_add("bold_italic", start, end)
         else:
             self.text_widget.tag_add("italic", start, end)
-
-    def _has_tag_in_range(self, tag_name, start, end):
-        ranges = self.text_widget.tag_ranges(tag_name)
-        for i in range(0, len(ranges), 2):
-            tag_start = ranges[i]
-            tag_end = ranges[i + 1]
-            if (self.text_widget.compare(tag_start, "<=", start) and
-                    self.text_widget.compare(tag_end, ">=", end)):
-                return True
-        return False
 
     def load_content(self, content):
         self.text_widget.delete("1.0", tk.END)
