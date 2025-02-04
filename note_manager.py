@@ -85,10 +85,14 @@ class NoteManager:
             "bold_italic": self._get_tag_ranges(widget, "bold_italic"),
         }
 
+        # 新增：同时保存 is_pinned, text_bg, text_fg
         data[note_id_str] = {
             "text": content,
             "header_bg": self.app.header_bg,
-            "tag_info": tag_info,
+            "is_pinned": self.app.is_pinned,  # 新增
+            "text_bg": self.app.text_bg,      # 新增
+            "text_fg": self.app.text_fg,      # 新增
+            "tag_info": tag_info
         }
         if name is not None:
             data[note_id_str]["name"] = name
@@ -102,17 +106,37 @@ class NoteManager:
         """
         1) 加载纯文本并插入（这会还原图片位置）
         2) 若有 tag_info，则重新给相应区间加上 bold/italic/bold_italic
+        3) 恢复 header_bg, is_pinned, text_bg, text_fg 并刷新 UI
         """
         data = self.load_notes_list()
         if self.app.note_id in data:
             note = data[self.app.note_id]
+            # 1) 纯文本 + 图片
             self.app.load_content(note.get("text", ""))
-            self.app.header_bg = note.get("header_bg", self.app.header_bg)
-            self.app.header.config(bg=self.app.header_bg)
 
-            # 还原标签
+            # 2) 恢复标签
             tag_info = note.get("tag_info", {})
             self._apply_tag_info(self.app.text_widget, tag_info)
+
+            # 3) 恢复外观
+            self.app.header_bg = note.get("header_bg", self.app.header_bg)
+            self.app.is_pinned = note.get("is_pinned", self.app.is_pinned)
+            self.app.text_bg   = note.get("text_bg", self.app.text_bg)
+            self.app.text_fg   = note.get("text_fg", self.app.text_fg)
+
+            # 应用标题栏颜色
+            self.app.header.config(bg=self.app.header_bg)
+            # 刷新标题栏按钮
+            if hasattr(self.app, "_refresh_header_buttons"):
+                self.app._refresh_header_buttons()
+
+            # 恢复 pinned
+            if hasattr(self.app, "_ensure_topmost_state"):
+                self.app._ensure_topmost_state()
+
+            # 应用文字区颜色
+            self.app.text_widget.config(bg=self.app.text_bg, fg=self.app.text_fg,
+                                        insertbackground=self.app.text_fg)
 
     def delete_note(self):
         """删除当前便笺后，调用 cleanup_unused_images 清理不再使用的图片。"""
@@ -135,12 +159,32 @@ class NoteManager:
         ranges = widget.tag_ranges(tag_name)
         for i in range(0, len(ranges), 2):
             start_i = ranges[i]
-            end_i = ranges[i+1]
-            start_off = widget.count("1.0", start_i, "chars")[0]
-            end_off   = widget.count("1.0", end_i,   "chars")[0]
-            # 如果 end_off > start_off，才有效
+            end_i = ranges[i + 1]
+
+            # 先转换索引，若索引失效则跳过
+            try:
+                valid_start = widget.index(start_i)
+                valid_end = widget.index(end_i)
+            except tk.TclError:
+                # 索引无效
+                continue
+
+            # 如果转换后仍是空字符串，也跳过
+            if not valid_start or not valid_end:
+                continue
+
+            # 调用 count 前做一次保护
+            start_vals = widget.count("1.0", valid_start, "chars")
+            end_vals = widget.count("1.0", valid_end, "chars")
+            # 若 count 返回 None 或是空list，就跳过
+            if not start_vals or not end_vals:
+                continue
+
+            start_off = start_vals[0]
+            end_off = end_vals[0]
             if end_off > start_off:
                 result.append([start_off, end_off])
+
         return result
 
     def _apply_tag_info(self, widget, tag_info):
