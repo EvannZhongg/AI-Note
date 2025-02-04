@@ -27,17 +27,21 @@ class WindowControls:
         self.app.root.geometry(f"+{x}+{y}")
 
     def change_color(self):
-        """修改顶部工具栏颜色"""
         color = colorchooser.askcolor()[1]
         if color:
             self.app.header_bg = color
             self.app.header.config(bg=color)
-            self.app.color_btn.config(bg=color)
-            self.app.image_btn.config(bg=color)
-            self.app.pin_btn.config(bg=color if not self.app.is_pinned else "#FFD700")
+            # pinned color 逻辑在 _refresh_header_buttons 内部处理
+            # 这里只需最后调用:
+            if hasattr(self.app, "_refresh_header_buttons"):
+                self.app._refresh_header_buttons()
 
     def toggle_pin(self):
-        """置顶或取消置顶窗口"""
-        self.app.is_pinned = not self.app.is_pinned
+        """置顶或取消置顶窗口，并调整按钮颜色"""
+        self.app.is_pinned = not self.app.is_pinned  # 修改 StickyNote 的 is_pinned 变量
         self.app.root.attributes("-topmost", self.app.is_pinned)
-        self.app.pin_btn.config(bg="#FFD700" if self.app.is_pinned else self.app.header_bg)
+
+        # **当 pinned 变化时，更新所有按钮颜色**
+        if hasattr(self.app, "_refresh_header_buttons"):
+            self.app._refresh_header_buttons()
+
