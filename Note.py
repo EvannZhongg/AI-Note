@@ -122,7 +122,8 @@ class StickyNote:
         self.ai_toggle_btn = tk.Button(self.toolbar, text="🤖", command=self.toggle_ai_mode,
                                        bg=self.header_bg, fg="white", font=button_font,
                                        relief="flat", bd=0)
-        self.ai_toggle_btn.pack(side=tk.LEFT, padx=10, pady=3)
+        self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
+        ToolTip(self.ai_toggle_btn, "AI聊天")
         # 右键弹出设置菜单，用于配置 AI 参数和 prompt 多套设置
         self.root.bind("<Button-3>", self.show_settings_menu)
         self.root.lift()
@@ -160,7 +161,7 @@ class StickyNote:
             return
         self.ai_input_entry.delete(0, tk.END)
         self.ai_chat_display.config(state=tk.NORMAL)
-        self.ai_chat_display.insert(tk.END, f"🧑 你: {user_message}\n", "user")
+        self.ai_chat_display.insert(tk.END, f"🧑 我: {user_message}\n", "user")
         self.ai_chat_display.config(state=tk.DISABLED)
         self.ai_chat_display.config(state=tk.NORMAL)
         self.ai_chat_display.insert(tk.END, "🤖 AI: 正在思考...\n", "ai")
@@ -363,7 +364,7 @@ class StickyNote:
             active_prompt_initial = "聊天"
         active_prompt_var = tk.StringVar(value=active_prompt_initial)
 
-        tk.Label(settings_win, text="选择已有模板:", font=label_font, bg=self.text_bg, fg=label_fg) \
+        tk.Label(settings_win, text="选择已有Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
             .grid(row=3, column=0, padx=10, pady=5, sticky="e")
         # 使用 Menubutton显示模板（始终保持默认背景样式）
         menubtn = tk.Menubutton(settings_win, textvariable=active_prompt_var, relief="raised", width=30,
