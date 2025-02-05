@@ -31,6 +31,7 @@ class StickyNote:
         else:
             self.root = tk.Toplevel(master)
         self.root.title("FakeNote")
+        # self.root.iconbitmap("FakeNote.ico")  #需要使用Logo时启用
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
         else:
