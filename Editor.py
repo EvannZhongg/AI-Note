@@ -10,7 +10,7 @@ import shutil
 
 # 使用说明文件路径与图片存放目录
 USAGE_FILE = "usage.txt"
-IMAGE_FOLDER = "sticky_notes_images"
+IMAGE_FOLDER = "Media Files"
 
 
 class UsageEditor:
@@ -51,7 +51,7 @@ class UsageEditor:
         """ 读取 `USAGE_FILE` 并解析 `[[IMG:xxx]]`，加载文本和图片 """
         if not os.path.exists(USAGE_FILE):
             with open(USAGE_FILE, "w", encoding="utf-8") as f:
-                f.write("请在此处编写使用说明，支持图片插入，例如 [[IMG:sticky_notes_images/example.png]]")
+                f.write("请在此处编写使用说明，支持图片插入，例如 [[IMG:Media Files/example.png]]")
 
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
             content = f.read().strip()
@@ -91,7 +91,7 @@ class UsageEditor:
             filename = os.path.basename(file_path)
             dest_path = os.path.join(image_folder_path, filename)
 
-            # 复制图片到 sticky_notes_images 文件夹
+            # 复制图片到 Media Files 文件夹
             if not os.path.exists(dest_path):
                 try:
                     shutil.copy(file_path, dest_path)
