@@ -1,3 +1,6 @@
+#版权声明
+#本项目受 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 许可协议保护。
+
 import tkinter as tk
 from text_shortcuts import TextShortcuts
 from note_manager import NoteManager
