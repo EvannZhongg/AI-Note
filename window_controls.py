@@ -31,6 +31,7 @@ class WindowControls:
         menu = Menu(self.app.root, tearoff=0)
         menu.add_command(label="修改工具栏颜色", command=self.change_toolbar_color)
         menu.add_command(label="修改背景颜色", command=self.change_background_color)
+        menu.add_command(label="修改字体颜色", command=self.change_font_color)
         menu.add_command(label="恢复默认颜色", command=self.restore_default_colors)
         # 将菜单显示在 color_btn 的下方
         x = self.app.color_btn.winfo_rootx()
@@ -47,21 +48,34 @@ class WindowControls:
                 self.app.toolbar.config(bg=color)
             if hasattr(self.app, "ai_toggle_btn"):
                 self.app.ai_toggle_btn.config(bg=color)
-            # 新增：更新 AI 聊天发送按钮的背景色
             if hasattr(self.app, "ai_send_button"):
                 self.app.ai_send_button.config(bg=color)
             if hasattr(self.app, "_refresh_header_buttons"):
                 self.app._refresh_header_buttons()
 
     def change_background_color(self):
-        # 选择颜色并应用到主内容区背景（包括文本编辑区和 AI 聊天区）
+        # 选择颜色并应用到主内容区背景（包括文本编辑区和 AI 聊天区的各个子区域）
         color = colorchooser.askcolor()[1]
         if color:
             self.app.text_bg = color
             self.app.content_frame.config(bg=color)
             self.app.text_widget.config(bg=color, insertbackground=self.app.text_fg)
+            # 若 AI 聊天区已初始化，则更新其各部分背景色
             if hasattr(self.app, "ai_frame"):
                 self.app.ai_frame.config(bg=color)
+            if hasattr(self.app, "ai_chat_display"):
+                self.app.ai_chat_display.config(bg=color)
+            if hasattr(self.app, "ai_input_frame"):
+                self.app.ai_input_frame.config(bg=color)
+
+    def change_font_color(self):
+        # 选择颜色并应用到文本控件（文本编辑区和 AI 聊天显示区）的前景色
+        color = colorchooser.askcolor()[1]
+        if color:
+            self.app.text_fg = color
+            self.app.text_widget.config(fg=color, insertbackground=color)
+            if hasattr(self.app, "ai_chat_display"):
+                self.app.ai_chat_display.config(fg=color)
 
     def restore_default_colors(self):
         # 默认颜色设置
@@ -82,11 +96,13 @@ class WindowControls:
         # 恢复 AI 发送按钮颜色
         if hasattr(self.app, "ai_send_button"):
             self.app.ai_send_button.config(bg=default_header_bg)
-        # 恢复内容区背景及文字区背景
+        # 恢复内容区背景及文字区颜色
         self.app.content_frame.config(bg=default_text_bg)
         self.app.text_widget.config(bg=default_text_bg, fg=default_text_fg, insertbackground=default_text_fg)
         if hasattr(self.app, "ai_frame"):
             self.app.ai_frame.config(bg=default_text_bg)
+        if hasattr(self.app, "ai_chat_display"):
+            self.app.ai_chat_display.config(bg=default_text_bg, fg=default_text_fg)
         if hasattr(self.app, "_refresh_header_buttons"):
             self.app._refresh_header_buttons()
 
