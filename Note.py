@@ -325,16 +325,18 @@ class StickyNote:
     # 新增：显示使用说明窗口
     def show_usage(self):
         """
-        打开一个只读的使用说明窗口，展示 usage.txt 文件的内容，
-        如果内容中包含图片标记[[IMG:xxx]]，则尝试从 sticky_notes_images 文件夹加载图片。
+        显示使用说明窗口，展示 usage.txt 文件的内容。
+        如果内容中包含图片标记 [[IMG:xxx]]，则从 Media Files 目录加载图片。
         """
         USAGE_FILE = "usage.txt"
+        USAGE_IMAGE_FOLDER = "Media Files"  # 修改为新的目录
+
         usage_win = tk.Toplevel(self.root)
         usage_win.title("使用说明")
         usage_win.geometry("325x400+100+100")
         usage_win.configure(bg=self.text_bg)
 
-        # 直接创建只读文本区域（不使用滚动条）
+        # 创建只读文本区域
         usage_text = tk.Text(usage_win, wrap="word", bg=self.text_bg, fg=self.text_fg,
                              font=("微软雅黑", 11), state="disabled")
         usage_text.pack(fill=tk.BOTH, expand=True)
@@ -343,13 +345,15 @@ class StickyNote:
         if not os.path.exists(USAGE_FILE):
             with open(USAGE_FILE, "w", encoding="utf-8") as f:
                 f.write("请在此处编写使用说明，支持图片插入，例如 [[IMG:example.png]]")
+
         # 读取文件内容
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 解析文本内容并插入图片（与 load_content() 类似的逻辑）
+        # 解析文本内容并插入图片
         pattern = r"\[\[IMG:(.*?)\]\]"
         parts = re.split(pattern, content)
+
         usage_text.config(state="normal")
         usage_text.delete("1.0", tk.END)
         usage_text.image_refs = []  # 保存图片引用，防止被垃圾回收
@@ -359,17 +363,22 @@ class StickyNote:
                 usage_text.insert(tk.END, part)
             else:
                 img_path = part.strip().replace("\\", "/")
+
+                # 确保图片路径正确，优先查找 Media Files 目录
                 if "/" not in img_path and os.sep not in img_path:
-                    img_path = os.path.join(IMAGE_FOLDER, img_path)
+                    img_path = os.path.join(USAGE_IMAGE_FOLDER, img_path)
                 img_path = os.path.normpath(img_path)
+
                 base_dir = os.path.dirname(os.path.abspath(__file__))
                 if not os.path.isabs(img_path):
                     img_full_path = os.path.join(base_dir, img_path)
                 else:
                     img_full_path = img_path
+
                 if not os.path.exists(img_full_path):
-                    usage_text.insert(tk.END, f"[图片加载失败:{img_path}]\n")
+                    usage_text.insert(tk.END, f"[图片加载失败: {img_path}]\n")
                     continue
+
                 try:
                     from PIL import Image, ImageTk
                     image = Image.open(img_full_path)
@@ -378,12 +387,14 @@ class StickyNote:
                         ratio = max_width / image.width
                         new_size = (max_width, int(image.height * ratio))
                         image = image.resize(new_size, Image.LANCZOS)
+
                     photo = ImageTk.PhotoImage(image)
                     usage_text.image_create(tk.END, image=photo)
                     usage_text.insert(tk.END, "\n")
-                    usage_text.image_refs.append(photo)
+                    usage_text.image_refs.append(photo)  # 保存图片引用，防止被垃圾回收
                 except Exception as e:
-                    usage_text.insert(tk.END, f"[图片加载失败:{img_path}]\n")
+                    usage_text.insert(tk.END, f"[图片加载失败: {img_path}]\n")
+
         usage_text.config(state="disabled")
 
     def open_ai_settings(self):
