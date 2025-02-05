@@ -12,10 +12,11 @@ import time
 import multiprocessing
 import re
 import json
-import os  # 新增，用于文件操作
+import os  # 用于文件操作
 
 global_command_queue = None
 IMAGE_FOLDER = "sticky_notes_images"
+
 
 def launch_sticky_note(note_id=None, command_queue=None, x=None, y=None):
     global global_command_queue
@@ -23,9 +24,11 @@ def launch_sticky_note(note_id=None, command_queue=None, x=None, y=None):
     note = StickyNote(note_id=note_id, x=x, y=y)
     note.root.mainloop()
 
+
 def create_new_sticky_note():
     p = multiprocessing.Process(target=launch_sticky_note, args=(None, global_command_queue))
     p.start()
+
 
 class StickyNote:
     def __init__(self, note_id=None, master=None, x=None, y=None):
@@ -34,7 +37,7 @@ class StickyNote:
         else:
             self.root = tk.Toplevel(master)
         self.root.title("FakeNote")
-        # self.root.iconbitmap("FakeNote.ico")  #需要使用Logo时启用
+        # self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
         else:
@@ -89,10 +92,10 @@ class StickyNote:
         self.content_frame = tk.Frame(self.root, bg=self.text_bg)
         self.content_frame.grid(row=1, column=0, sticky="nsew")
         self.text_widget = tk.Text(self.content_frame, wrap="word",
-                                    font=("微软雅黑", 11),
-                                    fg=self.text_fg, bg=self.text_bg,
-                                    borderwidth=0, insertbackground="#FFFFFF",
-                                    relief="flat", padx=10, pady=10)
+                                   font=("微软雅黑", 11),
+                                   fg=self.text_fg, bg=self.text_bg,
+                                   borderwidth=0, insertbackground="#FFFFFF",
+                                   relief="flat", padx=10, pady=10)
         self.text_widget.pack(fill=tk.BOTH, expand=True)
         self.text_widget.tag_configure("invisible", elide=True)
         self.text_widget.tag_configure("bold", font=("微软雅黑", 11, "bold"), foreground=self.text_fg)
@@ -141,12 +144,12 @@ class StickyNote:
         g = int(hexcolor[2:4], 16)
         b = int(hexcolor[4:6], 16)
         import colorsys
-        (h, s, v) = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
+        (h, s, v) = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
         v = v * factor
         (r2, g2, b2) = colorsys.hsv_to_rgb(h, s, v)
-        r2 = int(r2*255)
-        g2 = int(g2*255)
-        b2 = int(b2*255)
+        r2 = int(r2 * 255)
+        g2 = int(g2 * 255)
+        b2 = int(b2 * 255)
         return f"#{r2:02x}{g2:02x}{b2:02x}"
 
     def toggle_ai_mode(self):
@@ -199,13 +202,14 @@ class StickyNote:
             g = int(hexcolor[2:4], 16)
             b = int(hexcolor[4:6], 16)
             import colorsys
-            (h, s, v) = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
+            (h, s, v) = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
             v = v * factor
             (r2, g2, b2) = colorsys.hsv_to_rgb(h, s, v)
-            r2 = int(r2*255)
-            g2 = int(g2*255)
-            b2 = int(b2*255)
+            r2 = int(r2 * 255)
+            g2 = int(g2 * 255)
+            b2 = int(b2 * 255)
             return f"#{r2:02x}{g2:02x}{b2:02x}"
+
         all_buttons = [self.pin_btn, self.color_btn, self.image_btn,
                        self.bold_btn, self.italic_btn,
                        self.list_btn, self.new_btn, self.delete_btn]
@@ -222,10 +226,10 @@ class StickyNote:
             geo_str = self.root.geometry()
             match = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", geo_str)
             if match:
-                width  = int(match.group(1))
+                width = int(match.group(1))
                 height = int(match.group(2))
-                old_x  = int(match.group(3))
-                old_y  = int(match.group(4))
+                old_x = int(match.group(3))
+                old_y = int(match.group(4))
             else:
                 old_x, old_y = 100, 100
                 width = 300
@@ -255,6 +259,7 @@ class StickyNote:
                 sub_menu = tk.Menu(self.root, tearoff=0,
                                    bg="#3E3E3E", fg="#FFFFFF",
                                    activebackground="#FFCC00", activeforeground="black")
+
                 def open_note(nid=note_id):
                     import re
                     geo_str2 = self.root.geometry()
@@ -272,6 +277,7 @@ class StickyNote:
                     global global_command_queue
                     if global_command_queue:
                         global_command_queue.put(("open_with_xy", nid, new_x2, new_y2))
+
                 def rename_note(nid=note_id):
                     current_name = data[note_id].get("name", note_id)
                     new_name = simpledialog.askstring("重命名", "请输入新的便笺名称：",
@@ -281,6 +287,7 @@ class StickyNote:
                         with open(SAVE_FILE, "w", encoding="utf-8") as f:
                             json.dump(data, f, indent=4, ensure_ascii=False)
                         self.show_saved_notes_menu()
+
                 def delete_note(nid=note_id):
                     from tkinter import messagebox
                     if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=self.root):
@@ -289,6 +296,7 @@ class StickyNote:
                             with open(SAVE_FILE, "w", encoding="utf-8") as f:
                                 json.dump(data, f, indent=4, ensure_ascii=False)
                         self.show_saved_notes_menu()
+
                 sub_menu.add_command(label="打开", command=open_note)
                 sub_menu.add_command(label="重命名", command=rename_note)
                 sub_menu.add_command(label="删除", command=delete_note)
@@ -323,18 +331,13 @@ class StickyNote:
         USAGE_FILE = "usage.txt"
         usage_win = tk.Toplevel(self.root)
         usage_win.title("使用说明")
-        usage_win.geometry("300x400+100+100")
+        usage_win.geometry("325x400+100+100")
         usage_win.configure(bg=self.text_bg)
 
-        # 创建带滚动条的只读文本区域
-        frame = tk.Frame(usage_win, bg=self.text_bg)
-        frame.pack(fill=tk.BOTH, expand=True)
-        scrollbar = tk.Scrollbar(frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        usage_text = tk.Text(frame, wrap="word", bg=self.text_bg, fg=self.text_fg,
-                             font=("微软雅黑", 11), yscrollcommand=scrollbar.set, state="disabled")
-        usage_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=usage_text.yview)
+        # 直接创建只读文本区域（不使用滚动条）
+        usage_text = tk.Text(usage_win, wrap="word", bg=self.text_bg, fg=self.text_fg,
+                             font=("微软雅黑", 11), state="disabled")
+        usage_text.pack(fill=tk.BOTH, expand=True)
 
         # 如果文件不存在，则新建一个并写入默认提示内容
         if not os.path.exists(USAGE_FILE):
@@ -344,41 +347,43 @@ class StickyNote:
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 将内容写入文本区域
-        # 采用与 load_content() 类似的逻辑：用正则表达式拆分文本，标记部分为图片路径
+        # 解析文本内容并插入图片（与 load_content() 类似的逻辑）
         pattern = r"\[\[IMG:(.*?)\]\]"
         parts = re.split(pattern, content)
-        # 允许在文本控件处插入图片时保持对图片对象的引用，防止被垃圾回收
         usage_text.config(state="normal")
         usage_text.delete("1.0", tk.END)
-        usage_text.image_refs = []  # 用于保存图片引用
+        usage_text.image_refs = []  # 保存图片引用，防止被垃圾回收
 
         for i, part in enumerate(parts):
             if i % 2 == 0:
                 usage_text.insert(tk.END, part)
             else:
-                # part 为图片路径
-                img_path = part
-                if not os.path.exists(img_path):
-                    # 如果直接路径不存在，尝试在 IMAGE_FOLDER 中查找
-                    alt_path = os.path.join(IMAGE_FOLDER, img_path)
-                    if os.path.exists(alt_path):
-                        img_path = alt_path
+                img_path = part.strip().replace("\\", "/")
+                if "/" not in img_path and os.sep not in img_path:
+                    img_path = os.path.join(IMAGE_FOLDER, img_path)
+                img_path = os.path.normpath(img_path)
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                if not os.path.isabs(img_path):
+                    img_full_path = os.path.join(base_dir, img_path)
+                else:
+                    img_full_path = img_path
+                if not os.path.exists(img_full_path):
+                    usage_text.insert(tk.END, f"[图片加载失败:{img_path}]\n")
+                    continue
                 try:
                     from PIL import Image, ImageTk
-                    image = Image.open(img_path)
-                    # 可对图片进行缩放处理（例如限制宽度为300像素）
+                    image = Image.open(img_full_path)
                     max_width = 300
                     if image.width > max_width:
                         ratio = max_width / image.width
                         new_size = (max_width, int(image.height * ratio))
-                        image = image.resize(new_size, Image.ANTIALIAS)
+                        image = image.resize(new_size, Image.LANCZOS)
                     photo = ImageTk.PhotoImage(image)
                     usage_text.image_create(tk.END, image=photo)
                     usage_text.insert(tk.END, "\n")
                     usage_text.image_refs.append(photo)
                 except Exception as e:
-                    usage_text.insert(tk.END, f"[图片加载失败:{part}]\n")
+                    usage_text.insert(tk.END, f"[图片加载失败:{img_path}]\n")
         usage_text.config(state="disabled")
 
     def open_ai_settings(self):
@@ -448,6 +453,7 @@ class StickyNote:
 
         def create_template_submenu(name):
             sub_menu = tk.Menu(menu, tearoff=0, bg=self.header_bg, fg=label_fg, font=entry_font)
+
             def apply_template():
                 active_prompt_var.set(name)
                 if name == "聊天":
@@ -462,6 +468,7 @@ class StickyNote:
                     user_val = prompts_dict.get(name, {}).get("user", "")
                     system_var.set(system_val)
                     user_var.set(user_val)
+
             def rename_template():
                 from tkinter import simpledialog, messagebox
                 if name in ["聊天", "新建模板"]:
@@ -477,6 +484,7 @@ class StickyNote:
                     active_prompt_var.set(new_name)
                     rebuild_menu()
                     messagebox.showinfo("重命名成功", f"模板已重命名为 '{new_name}'", parent=settings_win)
+
             def delete_template():
                 from tkinter import messagebox
                 if name in ["聊天", "新建模板"]:
@@ -487,6 +495,7 @@ class StickyNote:
                     rebuild_menu()
                     active_prompt_var.set("聊天")
                     messagebox.showinfo("删除成功", f"模板 '{name}' 已删除。", parent=settings_win)
+
             sub_menu.add_command(label="应用", command=apply_template)
             sub_menu.add_command(label="重命名", command=rename_template)
             sub_menu.add_command(label="删除", command=delete_template)
@@ -499,6 +508,7 @@ class StickyNote:
             others = sorted([name for name in prompts_dict.keys() if name not in ["聊天"]])
             for name in others:
                 menu.add_cascade(label=name, menu=create_template_submenu(name))
+
         rebuild_menu()
 
         def on_prompt_select(*args):
@@ -515,6 +525,7 @@ class StickyNote:
                 user_val = prompts_dict.get(name, {}).get("user", "")
                 system_var.set(system_val)
                 user_var.set(user_val)
+
         active_prompt_var.trace("w", on_prompt_select)
 
         tk.Label(settings_win, text="System Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
@@ -535,6 +546,7 @@ class StickyNote:
                 active_prompt_var.set("新建模板")
                 system_entry.config(state="normal")
                 user_entry.config(state="normal")
+
         system_entry.bind("<Button-1>", switch_to_new)
         user_entry.bind("<Button-1>", switch_to_new)
 
@@ -626,3 +638,9 @@ class StickyNote:
                     self.image_handler.insert_pil_image(image, part, add_newline=False)
                 except Exception:
                     self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = StickyNote(master=root)
+    root.mainloop()
