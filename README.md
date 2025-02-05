@@ -24,4 +24,5 @@ AI.py - 处理大模型的调用
 Editor.py - 用于对使用说明文本进行编辑
 
 ## 版权声明
-本项目由EvanZhongg创建，仅供个人学习和研究使用，未经许可不得用于商业用途。
+
+本项目受 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 许可协议保护。
