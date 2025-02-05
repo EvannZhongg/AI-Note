@@ -9,6 +9,7 @@ import time
 import multiprocessing
 import re
 import json
+import os  # 新增，用于文件操作
 
 global_command_queue = None
 IMAGE_FOLDER = "sticky_notes_images"
@@ -118,14 +119,14 @@ class StickyNote:
         self.toolbar = tk.Frame(self.root, bg=self.header_bg, height=30)
         self.toolbar.grid(row=2, column=0, sticky="ew")
         self.toolbar.grid_propagate(False)
-        # AI 切换按钮（仅图标），外观与顶部按钮一致（flat，无边框）
+        # 将 AI 切换按钮移动到底部工具栏最右侧
         self.ai_toggle_btn = tk.Button(self.toolbar, text="🤖", command=self.toggle_ai_mode,
                                        bg=self.header_bg, fg="white", font=button_font,
                                        relief="flat", bd=0)
         self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.ai_toggle_btn, "AI聊天")
-        # 右键弹出设置菜单，用于配置 AI 参数和 prompt 多套设置
-        self.root.bind("<Button-3>", self.show_settings_menu)
+        # 右键弹出设置菜单，用于配置 AI 参数、prompt 多套设置及使用说明
+        self.root.bind("<Button-3>", self.show_context_menu)
         self.root.lift()
         self.root.attributes("-topmost", True)
         self.root.after(100, self._ensure_topmost_state)
@@ -268,18 +269,19 @@ class StickyNote:
                     if global_command_queue:
                         global_command_queue.put(("open_with_xy", nid, new_x2, new_y2))
                 def rename_note(nid=note_id):
-                    current_name = data[nid].get("name", nid)
+                    current_name = data[note_id].get("name", note_id)
                     new_name = simpledialog.askstring("重命名", "请输入新的便笺名称：",
                                                       parent=self.root, initialvalue=current_name)
                     if new_name:
-                        data[nid]["name"] = new_name
+                        data[note_id]["name"] = new_name
                         with open(SAVE_FILE, "w", encoding="utf-8") as f:
                             json.dump(data, f, indent=4, ensure_ascii=False)
                         self.show_saved_notes_menu()
                 def delete_note(nid=note_id):
+                    from tkinter import messagebox
                     if messagebox.askyesno("删除便笺", "确定删除此便笺吗？", parent=self.root):
-                        if nid in data:
-                            del data[nid]
+                        if note_id in data:
+                            del data[note_id]
                             with open(SAVE_FILE, "w", encoding="utf-8") as f:
                                 json.dump(data, f, indent=4, ensure_ascii=False)
                         self.show_saved_notes_menu()
@@ -301,10 +303,79 @@ class StickyNote:
                 return True
         return False
 
-    def show_settings_menu(self, event):
+    def show_context_menu(self, event):
+        """右键弹出菜单，包含 AI 设置和使用说明两个选项"""
         menu = tk.Menu(self.root, tearoff=0)
         menu.add_command(label="AI 设置", command=self.open_ai_settings)
+        menu.add_command(label="使用说明", command=self.show_usage)
         menu.tk_popup(event.x_root, event.y_root)
+
+    # 新增：显示使用说明窗口
+    def show_usage(self):
+        """
+        打开一个只读的使用说明窗口，展示 usage.txt 文件的内容，
+        如果内容中包含图片标记[[IMG:xxx]]，则尝试从 sticky_notes_images 文件夹加载图片。
+        """
+        USAGE_FILE = "usage.txt"
+        usage_win = tk.Toplevel(self.root)
+        usage_win.title("使用说明")
+        usage_win.geometry("300x400+100+100")
+        usage_win.configure(bg=self.text_bg)
+
+        # 创建带滚动条的只读文本区域
+        frame = tk.Frame(usage_win, bg=self.text_bg)
+        frame.pack(fill=tk.BOTH, expand=True)
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        usage_text = tk.Text(frame, wrap="word", bg=self.text_bg, fg=self.text_fg,
+                             font=("微软雅黑", 11), yscrollcommand=scrollbar.set, state="disabled")
+        usage_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=usage_text.yview)
+
+        # 如果文件不存在，则新建一个并写入默认提示内容
+        if not os.path.exists(USAGE_FILE):
+            with open(USAGE_FILE, "w", encoding="utf-8") as f:
+                f.write("请在此处编写使用说明，支持图片插入，例如 [[IMG:example.png]]")
+        # 读取文件内容
+        with open(USAGE_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 将内容写入文本区域
+        # 采用与 load_content() 类似的逻辑：用正则表达式拆分文本，标记部分为图片路径
+        pattern = r"\[\[IMG:(.*?)\]\]"
+        parts = re.split(pattern, content)
+        # 允许在文本控件处插入图片时保持对图片对象的引用，防止被垃圾回收
+        usage_text.config(state="normal")
+        usage_text.delete("1.0", tk.END)
+        usage_text.image_refs = []  # 用于保存图片引用
+
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                usage_text.insert(tk.END, part)
+            else:
+                # part 为图片路径
+                img_path = part
+                if not os.path.exists(img_path):
+                    # 如果直接路径不存在，尝试在 IMAGE_FOLDER 中查找
+                    alt_path = os.path.join(IMAGE_FOLDER, img_path)
+                    if os.path.exists(alt_path):
+                        img_path = alt_path
+                try:
+                    from PIL import Image, ImageTk
+                    image = Image.open(img_path)
+                    # 可对图片进行缩放处理（例如限制宽度为300像素）
+                    max_width = 300
+                    if image.width > max_width:
+                        ratio = max_width / image.width
+                        new_size = (max_width, int(image.height * ratio))
+                        image = image.resize(new_size, Image.ANTIALIAS)
+                    photo = ImageTk.PhotoImage(image)
+                    usage_text.image_create(tk.END, image=photo)
+                    usage_text.insert(tk.END, "\n")
+                    usage_text.image_refs.append(photo)
+                except Exception as e:
+                    usage_text.insert(tk.END, f"[图片加载失败:{part}]\n")
+        usage_text.config(state="disabled")
 
     def open_ai_settings(self):
         """打开 AI 设置对话框，配置 API、模型以及多套 prompt（system 和 user 部分）。
@@ -321,7 +392,6 @@ class StickyNote:
         settings_win.grab_set()
         settings_win.configure(bg=self.text_bg)
 
-        # 统一字体和颜色设置
         label_font = ("微软雅黑", 11)
         entry_font = ("微软雅黑", 11)
         btn_font = ("Segoe UI", 11, "bold")
@@ -366,7 +436,6 @@ class StickyNote:
 
         tk.Label(settings_win, text="选择已有Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
             .grid(row=3, column=0, padx=10, pady=5, sticky="e")
-        # 使用 Menubutton显示模板（始终保持默认背景样式）
         menubtn = tk.Menubutton(settings_win, textvariable=active_prompt_var, relief="raised", width=30,
                                 font=entry_font, bg=self.header_bg, fg=label_fg)
         menubtn.grid(row=3, column=1, padx=10, pady=5, sticky="w")
@@ -375,7 +444,6 @@ class StickyNote:
 
         def create_template_submenu(name):
             sub_menu = tk.Menu(menu, tearoff=0, bg=self.header_bg, fg=label_fg, font=entry_font)
-
             def apply_template():
                 active_prompt_var.set(name)
                 if name == "聊天":
@@ -390,7 +458,6 @@ class StickyNote:
                     user_val = prompts_dict.get(name, {}).get("user", "")
                     system_var.set(system_val)
                     user_var.set(user_val)
-
             def rename_template():
                 from tkinter import simpledialog, messagebox
                 if name in ["聊天", "新建模板"]:
@@ -406,7 +473,6 @@ class StickyNote:
                     active_prompt_var.set(new_name)
                     rebuild_menu()
                     messagebox.showinfo("重命名成功", f"模板已重命名为 '{new_name}'", parent=settings_win)
-
             def delete_template():
                 from tkinter import messagebox
                 if name in ["聊天", "新建模板"]:
@@ -417,7 +483,6 @@ class StickyNote:
                     rebuild_menu()
                     active_prompt_var.set("聊天")
                     messagebox.showinfo("删除成功", f"模板 '{name}' 已删除。", parent=settings_win)
-
             sub_menu.add_command(label="应用", command=apply_template)
             sub_menu.add_command(label="重命名", command=rename_template)
             sub_menu.add_command(label="删除", command=delete_template)
@@ -430,7 +495,6 @@ class StickyNote:
             others = sorted([name for name in prompts_dict.keys() if name not in ["聊天"]])
             for name in others:
                 menu.add_cascade(label=name, menu=create_template_submenu(name))
-
         rebuild_menu()
 
         def on_prompt_select(*args):
@@ -447,7 +511,6 @@ class StickyNote:
                 user_val = prompts_dict.get(name, {}).get("user", "")
                 system_var.set(system_val)
                 user_var.set(user_val)
-
         active_prompt_var.trace("w", on_prompt_select)
 
         tk.Label(settings_win, text="System Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
@@ -468,7 +531,6 @@ class StickyNote:
                 active_prompt_var.set("新建模板")
                 system_entry.config(state="normal")
                 user_entry.config(state="normal")
-
         system_entry.bind("<Button-1>", switch_to_new)
         user_entry.bind("<Button-1>", switch_to_new)
 
