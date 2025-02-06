@@ -59,7 +59,7 @@ class NoteManager:
 
     def save_note(self):
         """
-        1) 获取纯文本（含 [[IMG:...]]）和三种标签区间
+        1) 获取纯文本（含 [[IMG:...]]）和所有标签区间（bold, italic, bold_italic, underline）
         2) 存入 JSON
         3) cleanup_unused_images
         """
@@ -78,20 +78,21 @@ class NoteManager:
         existing = data.get(note_id_str, {})
         name = existing.get("name", None)
 
-        # 提取三种标签区间
+        # 提取所有标签区间，包括下划线
         tag_info = {
             "bold": self._get_tag_ranges(widget, "bold"),
             "italic": self._get_tag_ranges(widget, "italic"),
             "bold_italic": self._get_tag_ranges(widget, "bold_italic"),
+            "underline": self._get_tag_ranges(widget, "underline")
         }
 
-        # 新增：同时保存 is_pinned, text_bg, text_fg
+        # 同时保存 is_pinned, text_bg, text_fg
         data[note_id_str] = {
             "text": content,
             "header_bg": self.app.header_bg,
-            "is_pinned": self.app.is_pinned,  # 新增
-            "text_bg": self.app.text_bg,      # 新增
-            "text_fg": self.app.text_fg,      # 新增
+            "is_pinned": self.app.is_pinned,
+            "text_bg": self.app.text_bg,
+            "text_fg": self.app.text_fg,
             "tag_info": tag_info
         }
         if name is not None:
@@ -105,7 +106,7 @@ class NoteManager:
     def load_note(self):
         """
         1) 加载纯文本并插入（这会还原图片位置）
-        2) 若有 tag_info，则重新给相应区间加上 bold/italic/bold_italic
+        2) 若有 tag_info，则重新给相应区间加上 bold/italic/bold_italic/underline
         3) 恢复 header_bg, is_pinned, text_bg, text_fg 并刷新 UI
         """
         data = self.load_notes_list()
@@ -126,15 +127,12 @@ class NoteManager:
 
             # 应用标题栏颜色
             self.app.header.config(bg=self.app.header_bg)
-            # 刷新标题栏按钮
             if hasattr(self.app, "_refresh_header_buttons"):
                 self.app._refresh_header_buttons()
 
-            # 恢复 pinned
             if hasattr(self.app, "_ensure_topmost_state"):
                 self.app._ensure_topmost_state()
 
-            # 应用文字区颜色
             self.app.text_widget.config(bg=self.app.text_bg, fg=self.app.text_fg,
                                         insertbackground=self.app.text_fg)
 
@@ -160,41 +158,32 @@ class NoteManager:
         for i in range(0, len(ranges), 2):
             start_i = ranges[i]
             end_i = ranges[i + 1]
-
-            # 先转换索引，若索引失效则跳过
             try:
                 valid_start = widget.index(start_i)
                 valid_end = widget.index(end_i)
             except tk.TclError:
-                # 索引无效
                 continue
-
-            # 如果转换后仍是空字符串，也跳过
             if not valid_start or not valid_end:
                 continue
-
-            # 调用 count 前做一次保护
             start_vals = widget.count("1.0", valid_start, "chars")
             end_vals = widget.count("1.0", valid_end, "chars")
-            # 若 count 返回 None 或是空list，就跳过
             if not start_vals or not end_vals:
                 continue
-
             start_off = start_vals[0]
             end_off = end_vals[0]
             if end_off > start_off:
                 result.append([start_off, end_off])
-
         return result
 
     def _apply_tag_info(self, widget, tag_info):
         """
-        根据保存的 tag_info 恢复三种标签
-        tag_info 结构:
+        根据保存的 tag_info 恢复所有标签
+        tag_info 结构示例:
         {
           "bold": [ [start_off, end_off], ... ],
-          "italic": [...],
-          "bold_italic": [...]
+          "italic": [ ... ],
+          "bold_italic": [ ... ],
+          "underline": [ ... ]
         }
         """
         for tag_name, ranges_list in tag_info.items():
