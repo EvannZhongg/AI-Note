@@ -101,6 +101,8 @@ class StickyNote:
         self.text_widget.tag_configure("bold", font=("微软雅黑", 11, "bold"), foreground=self.text_fg)
         self.text_widget.tag_configure("italic", font=("微软雅黑", 11, "italic"), foreground=self.text_fg)
         self.text_widget.tag_configure("bold_italic", font=("微软雅黑", 11, "bold", "italic"), foreground=self.text_fg)
+        # 新增：配置下划线标签
+        self.text_widget.tag_configure("underline", font=("微软雅黑", 11, "underline"), foreground=self.text_fg)
         self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
         self.note_manager.load_note()
         self.notes_menu = None
@@ -132,7 +134,13 @@ class StickyNote:
                                        relief="flat", bd=0)
         self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.ai_toggle_btn, "AI聊天")
-        # 然后创建切换项目符号按钮，放在 AI 切换按钮左侧
+        # 创建下划线按钮，放在 AI 切换按钮左侧
+        self.underline_btn = tk.Button(self.toolbar, text="U̲", command=self.toggle_underline,
+                                       bg=self.header_bg, fg="white", font=button_font,
+                                       relief="flat", bd=0)
+        self.underline_btn.pack(side=tk.RIGHT, padx=10, pady=3)
+        ToolTip(self.underline_btn, "下划线")
+        # 创建切换项目符号按钮，放在下划线按钮左侧
         self.bullet_btn = tk.Button(self.toolbar, text="≣", command=self.toggle_bullets,
                                     bg=self.header_bg, fg="white", font=button_font,
                                     relief="flat", bd=0)
@@ -232,10 +240,10 @@ class StickyNote:
             geo_str = self.root.geometry()
             match = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", geo_str)
             if match:
-                width = int(match.group(1))
+                width  = int(match.group(1))
                 height = int(match.group(2))
-                old_x = int(match.group(3))
-                old_y = int(match.group(4))
+                old_x  = int(match.group(3))
+                old_y  = int(match.group(4))
             else:
                 old_x, old_y = 100, 100
                 width = 300
@@ -520,7 +528,6 @@ class StickyNote:
             others = sorted([name for name in prompts_dict.keys() if name not in ["聊天"]])
             for name in others:
                 menu.add_cascade(label=name, menu=create_template_submenu(name))
-
         rebuild_menu()
 
         def on_prompt_select(*args):
@@ -537,7 +544,6 @@ class StickyNote:
                 user_val = prompts_dict.get(name, {}).get("user", "")
                 system_var.set(system_val)
                 user_var.set(user_val)
-
         active_prompt_var.trace("w", on_prompt_select)
 
         tk.Label(settings_win, text="System Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
@@ -558,7 +564,6 @@ class StickyNote:
                 active_prompt_var.set("新建模板")
                 system_entry.config(state="normal")
                 user_entry.config(state="normal")
-
         system_entry.bind("<Button-1>", switch_to_new)
         user_entry.bind("<Button-1>", switch_to_new)
 
@@ -636,22 +641,19 @@ class StickyNote:
         else:
             self.text_widget.tag_add("italic", start, end)
 
-    def load_content(self, content):
-        self.text_widget.delete("1.0", tk.END)
-        pattern = r"\[\[IMG:(.*?)\]\]"
-        parts = re.split(pattern, content)
-        for i, part in enumerate(parts):
-            if i % 2 == 0:
-                self.text_widget.insert(tk.END, part)
-            else:
-                try:
-                    from PIL import Image
-                    image = Image.open(part)
-                    self.image_handler.insert_pil_image(image, part, add_newline=False)
-                except Exception:
-                    self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
+    # 新增：下划线切换功能
+    def toggle_underline(self):
+        try:
+            start = self.text_widget.index("sel.first")
+            end = self.text_widget.index("sel.last")
+        except tk.TclError:
+            return
+        if self._has_tag_in_range("underline", start, end):
+            self.text_widget.tag_remove("underline", start, end)
+        else:
+            self.text_widget.tag_add("underline", start, end)
 
-    # 新增：切换项目序号功能
+    # 新增：切换项目符号功能
     def toggle_bullets(self):
         try:
             start = self.text_widget.index("sel.first")
@@ -661,7 +663,6 @@ class StickyNote:
 
         selected_text = self.text_widget.get(start, end)
         lines = selected_text.split("\n")
-        # 检查是否所有非空行都已以"• "开头
         all_bulleted = all(line.strip() == "" or line.lstrip().startswith("• ") for line in lines)
         new_lines = []
         if all_bulleted:
@@ -680,3 +681,17 @@ class StickyNote:
         self.text_widget.delete(start, end)
         self.text_widget.insert(start, new_text)
 
+    def load_content(self, content):
+        self.text_widget.delete("1.0", tk.END)
+        pattern = r"\[\[IMG:(.*?)\]\]"
+        parts = re.split(pattern, content)
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                self.text_widget.insert(tk.END, part)
+            else:
+                try:
+                    from PIL import Image
+                    image = Image.open(part)
+                    self.image_handler.insert_pil_image(image, part, add_newline=False)
+                except Exception:
+                    self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
