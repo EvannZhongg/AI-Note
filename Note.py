@@ -37,7 +37,7 @@ class StickyNote:
         else:
             self.root = tk.Toplevel(master)
         self.root.title("FakeNote")
-        # self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
+        #self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
         else:
@@ -233,8 +233,8 @@ class StickyNote:
             else:
                 old_x, old_y = 100, 100
                 width = 300
-            new_x = old_x + width + 30
-            new_y = old_y
+            new_x = old_x + 30
+            new_y = old_y + 30
             global_command_queue.put(("new_with_xy", new_x, new_y))
 
     def minimize_window(self):
@@ -272,8 +272,8 @@ class StickyNote:
                     else:
                         ox2, oy2 = 100, 100
                         w2 = 300
-                    new_x2 = ox2 + w2 + 30
-                    new_y2 = oy2
+                    new_x2 = ox2 + 30
+                    new_y2 = oy2 + 30
                     global global_command_queue
                     if global_command_queue:
                         global_command_queue.put(("open_with_xy", nid, new_x2, new_y2))
