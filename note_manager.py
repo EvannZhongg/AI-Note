@@ -83,7 +83,9 @@ class NoteManager:
             "bold": self._get_tag_ranges(widget, "bold"),
             "italic": self._get_tag_ranges(widget, "italic"),
             "bold_italic": self._get_tag_ranges(widget, "bold_italic"),
-            "underline": self._get_tag_ranges(widget, "underline")
+            "underline": self._get_tag_ranges(widget, "underline"),
+            "strikethrough": self._get_tag_ranges(widget, "strikethrough")
+
         }
 
         # 同时保存 is_pinned, text_bg, text_fg
