@@ -37,7 +37,7 @@ class StickyNote:
         else:
             self.root = tk.Toplevel(master)
         self.root.title("FakeNote")
-        #self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
+        # self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
         else:
@@ -126,12 +126,17 @@ class StickyNote:
         self.toolbar = tk.Frame(self.root, bg=self.header_bg, height=30)
         self.toolbar.grid(row=2, column=0, sticky="ew")
         self.toolbar.grid_propagate(False)
-        # 将 AI 切换按钮移动到底部工具栏最右侧
+        # 先创建 AI 切换按钮放在最右侧
         self.ai_toggle_btn = tk.Button(self.toolbar, text="🤖", command=self.toggle_ai_mode,
                                        bg=self.header_bg, fg="white", font=button_font,
                                        relief="flat", bd=0)
         self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.ai_toggle_btn, "AI聊天")
+        # 然后创建切换项目符号按钮，放在 AI 切换按钮左侧
+        self.bullet_btn = tk.Button(self.toolbar, text="•", command=self.toggle_bullets,
+                                    bg=self.header_bg, fg="white", font=button_font,
+                                    relief="flat", bd=0)
+        self.bullet_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         # 右键弹出设置菜单，用于配置 AI 参数、prompt 多套设置及使用说明
         self.root.bind("<Button-3>", self.show_context_menu)
         self.root.lift()
@@ -325,76 +330,71 @@ class StickyNote:
     # 新增：显示使用说明窗口
     def show_usage(self):
         """
-        显示使用说明窗口，展示 usage.txt 文件的内容。
-        如果内容中包含图片标记 [[IMG:xxx]]，则从 Media Files 目录加载图片。
+        打开一个只读的使用说明窗口，展示 usage.txt 文件的内容，
+        如果内容中包含图片标记 [[IMG:xxx]]，则尝试从指定目录加载图片。
         """
         USAGE_FILE = "usage.txt"
-        USAGE_IMAGE_FOLDER = "Media Files"  # 修改为新的目录
+        USAGE_IMAGE_FOLDER = "Media Files"  # 此处设定使用说明中的图片存放目录
 
         usage_win = tk.Toplevel(self.root)
         usage_win.title("使用说明")
         usage_win.geometry("325x400+100+100")
         usage_win.configure(bg=self.text_bg)
 
-        # 创建只读文本区域
-        usage_text = tk.Text(usage_win, wrap="word", bg=self.text_bg, fg=self.text_fg,
-                             font=("微软雅黑", 11), state="disabled")
-        usage_text.pack(fill=tk.BOTH, expand=True)
+        # 创建带滚动条的只读文本区域
+        frame = tk.Frame(usage_win, bg=self.text_bg)
+        frame.pack(fill=tk.BOTH, expand=True)
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        usage_text = tk.Text(frame, wrap="word", bg=self.text_bg, fg=self.text_fg,
+                             font=("微软雅黑", 11), yscrollcommand=scrollbar.set, state="disabled")
+        usage_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=usage_text.yview)
 
-        # 如果文件不存在，则新建一个并写入默认提示内容
         if not os.path.exists(USAGE_FILE):
             with open(USAGE_FILE, "w", encoding="utf-8") as f:
                 f.write("请在此处编写使用说明，支持图片插入，例如 [[IMG:example.png]]")
-
-        # 读取文件内容
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 解析文本内容并插入图片
         pattern = r"\[\[IMG:(.*?)\]\]"
         parts = re.split(pattern, content)
 
         usage_text.config(state="normal")
         usage_text.delete("1.0", tk.END)
-        usage_text.image_refs = []  # 保存图片引用，防止被垃圾回收
+        usage_text.image_refs = []  # 保存图片引用
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
 
         for i, part in enumerate(parts):
             if i % 2 == 0:
                 usage_text.insert(tk.END, part)
             else:
-                img_path = part.strip().replace("\\", "/")
-
-                # 确保图片路径正确，优先查找 Media Files 目录
-                if "/" not in img_path and os.sep not in img_path:
-                    img_path = os.path.join(USAGE_IMAGE_FOLDER, img_path)
-                img_path = os.path.normpath(img_path)
-
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                if not os.path.isabs(img_path):
-                    img_full_path = os.path.join(base_dir, img_path)
+                img_marker = part.strip().replace("\\", "/")
+                if "/" not in img_marker and os.sep not in img_marker:
+                    img_marker = os.path.join(USAGE_IMAGE_FOLDER, img_marker)
+                img_marker = os.path.normpath(img_marker)
+                if not os.path.isabs(img_marker):
+                    img_path = os.path.join(base_dir, img_marker)
                 else:
-                    img_full_path = img_path
-
-                if not os.path.exists(img_full_path):
-                    usage_text.insert(tk.END, f"[图片加载失败: {img_path}]\n")
+                    img_path = img_marker
+                if not os.path.exists(img_path):
+                    usage_text.insert(tk.END, f"[图片加载失败: {img_marker}]\n")
                     continue
-
                 try:
                     from PIL import Image, ImageTk
-                    image = Image.open(img_full_path)
+                    image = Image.open(img_path)
                     max_width = 300
                     if image.width > max_width:
                         ratio = max_width / image.width
                         new_size = (max_width, int(image.height * ratio))
                         image = image.resize(new_size, Image.LANCZOS)
-
                     photo = ImageTk.PhotoImage(image)
                     usage_text.image_create(tk.END, image=photo)
                     usage_text.insert(tk.END, "\n")
-                    usage_text.image_refs.append(photo)  # 保存图片引用，防止被垃圾回收
+                    usage_text.image_refs.append(photo)
                 except Exception as e:
-                    usage_text.insert(tk.END, f"[图片加载失败: {img_path}]\n")
-
+                    usage_text.insert(tk.END, f"[图片加载失败: {img_marker}]\n")
         usage_text.config(state="disabled")
 
     def open_ai_settings(self):
@@ -650,8 +650,37 @@ class StickyNote:
                 except Exception:
                     self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
 
+    # 新增：切换项目符号功能
+    def toggle_bullets(self):
+        try:
+            start = self.text_widget.index("sel.first")
+            end = self.text_widget.index("sel.last")
+        except tk.TclError:
+            return  # 没有选中文本则不执行
+
+        selected_text = self.text_widget.get(start, end)
+        lines = selected_text.split("\n")
+        # 检查是否所有非空行都已以"• "开头
+        all_bulleted = all(line.strip() == "" or line.lstrip().startswith("• ") for line in lines)
+        new_lines = []
+        if all_bulleted:
+            # 移除项目符号
+            for line in lines:
+                new_line = re.sub(r"^\s*•\s*", "", line)
+                new_lines.append(new_line)
+        else:
+            # 为每个非空行添加项目符号
+            for line in lines:
+                if line.strip():
+                    new_lines.append("• " + line)
+                else:
+                    new_lines.append(line)
+        new_text = "\n".join(new_lines)
+        self.text_widget.delete(start, end)
+        self.text_widget.insert(start, new_text)
+
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = StickyNote(master=root)
+    app = StickyNote()
     root.mainloop()
