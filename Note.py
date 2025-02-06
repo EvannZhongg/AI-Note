@@ -1,6 +1,3 @@
-#版权声明
-#本项目受 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 许可协议保护。
-
 import tkinter as tk
 from text_shortcuts import TextShortcuts
 from note_manager import NoteManager
@@ -101,8 +98,9 @@ class StickyNote:
         self.text_widget.tag_configure("bold", font=("微软雅黑", 11, "bold"), foreground=self.text_fg)
         self.text_widget.tag_configure("italic", font=("微软雅黑", 11, "italic"), foreground=self.text_fg)
         self.text_widget.tag_configure("bold_italic", font=("微软雅黑", 11, "bold", "italic"), foreground=self.text_fg)
-        # 新增：配置下划线标签
+        # 配置下划线和删除线标签
         self.text_widget.tag_configure("underline", font=("微软雅黑", 11, "underline"), foreground=self.text_fg)
+        self.text_widget.tag_configure("strikethrough", font=("微软雅黑", 11, "overstrike"), foreground=self.text_fg)
         self.shortcut_manager = TextShortcuts(self.text_widget, image_handler=self.image_handler)
         self.note_manager.load_note()
         self.notes_menu = None
@@ -128,19 +126,22 @@ class StickyNote:
         self.toolbar = tk.Frame(self.root, bg=self.header_bg, height=30)
         self.toolbar.grid(row=2, column=0, sticky="ew")
         self.toolbar.grid_propagate(False)
-        # 先创建 AI 切换按钮放在最右侧
+        # 按钮从右到左依次为：AI聊天、删除线、下划线、项目符号
         self.ai_toggle_btn = tk.Button(self.toolbar, text="🤖", command=self.toggle_ai_mode,
                                        bg=self.header_bg, fg="white", font=button_font,
                                        relief="flat", bd=0)
         self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.ai_toggle_btn, "AI聊天")
-        # 创建下划线按钮，放在 AI 切换按钮左侧
+        self.strikethrough_btn = tk.Button(self.toolbar, text="S̶", command=self.toggle_strikethrough,
+                                           bg=self.header_bg, fg="white", font=button_font,
+                                           relief="flat", bd=0)
+        self.strikethrough_btn.pack(side=tk.RIGHT, padx=10, pady=3)
+        ToolTip(self.strikethrough_btn, "删除线")
         self.underline_btn = tk.Button(self.toolbar, text="U̲", command=self.toggle_underline,
                                        bg=self.header_bg, fg="white", font=button_font,
                                        relief="flat", bd=0)
         self.underline_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.underline_btn, "下划线")
-        # 创建切换项目符号按钮，放在下划线按钮左侧
         self.bullet_btn = tk.Button(self.toolbar, text="≣", command=self.toggle_bullets,
                                     bg=self.header_bg, fg="white", font=button_font,
                                     relief="flat", bd=0)
@@ -240,10 +241,10 @@ class StickyNote:
             geo_str = self.root.geometry()
             match = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", geo_str)
             if match:
-                width  = int(match.group(1))
+                width = int(match.group(1))
                 height = int(match.group(2))
-                old_x  = int(match.group(3))
-                old_y  = int(match.group(4))
+                old_x = int(match.group(3))
+                old_y = int(match.group(4))
             else:
                 old_x, old_y = 100, 100
                 width = 300
@@ -528,6 +529,7 @@ class StickyNote:
             others = sorted([name for name in prompts_dict.keys() if name not in ["聊天"]])
             for name in others:
                 menu.add_cascade(label=name, menu=create_template_submenu(name))
+
         rebuild_menu()
 
         def on_prompt_select(*args):
@@ -544,6 +546,7 @@ class StickyNote:
                 user_val = prompts_dict.get(name, {}).get("user", "")
                 system_var.set(system_val)
                 user_var.set(user_val)
+
         active_prompt_var.trace("w", on_prompt_select)
 
         tk.Label(settings_win, text="System Prompt:", font=label_font, bg=self.text_bg, fg=label_fg) \
@@ -564,6 +567,7 @@ class StickyNote:
                 active_prompt_var.set("新建模板")
                 system_entry.config(state="normal")
                 user_entry.config(state="normal")
+
         system_entry.bind("<Button-1>", switch_to_new)
         user_entry.bind("<Button-1>", switch_to_new)
 
@@ -652,6 +656,18 @@ class StickyNote:
             self.text_widget.tag_remove("underline", start, end)
         else:
             self.text_widget.tag_add("underline", start, end)
+
+    # 新增：删除线切换功能
+    def toggle_strikethrough(self):
+        try:
+            start = self.text_widget.index("sel.first")
+            end = self.text_widget.index("sel.last")
+        except tk.TclError:
+            return
+        if self._has_tag_in_range("strikethrough", start, end):
+            self.text_widget.tag_remove("strikethrough", start, end)
+        else:
+            self.text_widget.tag_add("strikethrough", start, end)
 
     # 新增：切换项目符号功能
     def toggle_bullets(self):
