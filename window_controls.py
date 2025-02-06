@@ -48,11 +48,13 @@ class WindowControls:
                 self.app.ai_toggle_btn.config(bg=color)
             if hasattr(self.app, "ai_send_button"):
                 self.app.ai_send_button.config(bg=color)
-            # 新增：更新项目符号和下划线按钮（如果存在）
+            # 更新项目符号、下划线和删除线按钮（如果存在）
             if hasattr(self.app, "bullet_btn"):
                 self.app.bullet_btn.config(bg=color)
             if hasattr(self.app, "underline_btn"):
                 self.app.underline_btn.config(bg=color)
+            if hasattr(self.app, "strikethrough_btn"):
+                self.app.strikethrough_btn.config(bg=color)
             if hasattr(self.app, "_refresh_header_buttons"):
                 self.app._refresh_header_buttons()
 
@@ -93,11 +95,13 @@ class WindowControls:
             self.app.ai_toggle_btn.config(bg=default_header_bg)
         if hasattr(self.app, "ai_send_button"):
             self.app.ai_send_button.config(bg=default_header_bg)
-        # 恢复项目符号和下划线按钮颜色
+        # 恢复项目符号、下划线和删除线按钮颜色
         if hasattr(self.app, "bullet_btn"):
             self.app.bullet_btn.config(bg=default_header_bg)
         if hasattr(self.app, "underline_btn"):
             self.app.underline_btn.config(bg=default_header_bg)
+        if hasattr(self.app, "strikethrough_btn"):
+            self.app.strikethrough_btn.config(bg=default_header_bg)
         # 恢复内容区背景及文字区颜色
         self.app.content_frame.config(bg=default_text_bg)
         self.app.text_widget.config(bg=default_text_bg, fg=default_text_fg, insertbackground=default_text_fg)
