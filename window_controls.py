@@ -48,6 +48,11 @@ class WindowControls:
                 self.app.ai_toggle_btn.config(bg=color)
             if hasattr(self.app, "ai_send_button"):
                 self.app.ai_send_button.config(bg=color)
+            # 新增：更新项目符号和下划线按钮（如果存在）
+            if hasattr(self.app, "bullet_btn"):
+                self.app.bullet_btn.config(bg=color)
+            if hasattr(self.app, "underline_btn"):
+                self.app.underline_btn.config(bg=color)
             if hasattr(self.app, "_refresh_header_buttons"):
                 self.app._refresh_header_buttons()
 
@@ -57,13 +62,13 @@ class WindowControls:
             self.app.text_bg = color
             self.app.content_frame.config(bg=color)
             self.app.text_widget.config(bg=color, insertbackground=self.app.text_fg)
-            # 若 AI 聊天区已初始化，则更新其各部分背景色
+            # 更新 AI 聊天区各部分背景色
             if hasattr(self.app, "ai_frame"):
                 self.app.ai_frame.config(bg=color)
             if hasattr(self.app, "ai_chat_display"):
                 self.app.ai_chat_display.config(bg=color)
             if hasattr(self.app, "ai_input_frame"):
-                self.app.ai_input_frame.config(bg=color)  # **确保 AI 输入框背景色更新**
+                self.app.ai_input_frame.config(bg=color)
 
     def change_font_color(self):
         color = colorchooser.askcolor()[1]
@@ -88,7 +93,12 @@ class WindowControls:
             self.app.ai_toggle_btn.config(bg=default_header_bg)
         if hasattr(self.app, "ai_send_button"):
             self.app.ai_send_button.config(bg=default_header_bg)
-        # 恢复内容区背景及文字颜色
+        # 恢复项目符号和下划线按钮颜色
+        if hasattr(self.app, "bullet_btn"):
+            self.app.bullet_btn.config(bg=default_header_bg)
+        if hasattr(self.app, "underline_btn"):
+            self.app.underline_btn.config(bg=default_header_bg)
+        # 恢复内容区背景及文字区颜色
         self.app.content_frame.config(bg=default_text_bg)
         self.app.text_widget.config(bg=default_text_bg, fg=default_text_fg, insertbackground=default_text_fg)
         if hasattr(self.app, "ai_frame"):
@@ -96,7 +106,7 @@ class WindowControls:
         if hasattr(self.app, "ai_chat_display"):
             self.app.ai_chat_display.config(bg=default_text_bg, fg=default_text_fg)
         if hasattr(self.app, "ai_input_frame"):
-            self.app.ai_input_frame.config(bg=default_text_bg)  # **恢复 AI 输入区域的背景颜色**
+            self.app.ai_input_frame.config(bg=default_text_bg)
         if hasattr(self.app, "_refresh_header_buttons"):
             self.app._refresh_header_buttons()
 
