@@ -133,10 +133,11 @@ class StickyNote:
         self.ai_toggle_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.ai_toggle_btn, "AI聊天")
         # 然后创建切换项目符号按钮，放在 AI 切换按钮左侧
-        self.bullet_btn = tk.Button(self.toolbar, text="•", command=self.toggle_bullets,
+        self.bullet_btn = tk.Button(self.toolbar, text="≣", command=self.toggle_bullets,
                                     bg=self.header_bg, fg="white", font=button_font,
                                     relief="flat", bd=0)
         self.bullet_btn.pack(side=tk.RIGHT, padx=10, pady=3)
+        ToolTip(self.bullet_btn, "项目序号")
         # 右键弹出设置菜单，用于配置 AI 参数、prompt 多套设置及使用说明
         self.root.bind("<Button-3>", self.show_context_menu)
         self.root.lift()
@@ -650,7 +651,7 @@ class StickyNote:
                 except Exception:
                     self.text_widget.insert(tk.END, f"[图片加载失败:{part}]")
 
-    # 新增：切换项目符号功能
+    # 新增：切换项目序号功能
     def toggle_bullets(self):
         try:
             start = self.text_widget.index("sel.first")
@@ -679,8 +680,3 @@ class StickyNote:
         self.text_widget.delete(start, end)
         self.text_widget.insert(start, new_text)
 
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = StickyNote()
-    root.mainloop()
