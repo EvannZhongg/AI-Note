@@ -246,27 +246,13 @@ class StickyNote:
             self.root.attributes("-topmost", True)
 
     def _refresh_header_buttons(self):
-        def _darken_color(hexcolor, factor=0.7):
-            hexcolor = hexcolor.lstrip('#')
-            r = int(hexcolor[0:2], 16)
-            g = int(hexcolor[2:4], 16)
-            b = int(hexcolor[4:6], 16)
-            import colorsys
-            (h, s, v) = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
-            v = v * factor
-            (r2, g2, b2) = colorsys.hsv_to_rgb(h, s, v)
-            r2 = int(r2 * 255)
-            g2 = int(g2 * 255)
-            b2 = int(b2 * 255)
-            return f"#{r2:02x}{g2:02x}{b2:02x}"
-
         all_buttons = [self.pin_btn, self.color_btn, self.image_btn,
                        self.bold_btn, self.italic_btn,
                        self.list_btn, self.new_btn, self.delete_btn]
         for b in all_buttons:
             b.config(bg=self.header_bg)
         if self.is_pinned:
-            dark_bg = _darken_color(self.header_bg, 0.7)
+            dark_bg = self._darken_color(self.header_bg, 0.7)  # 调用合并后的方法
             self.pin_btn.config(bg=dark_bg)
 
     def request_new_sticky_note(self):
