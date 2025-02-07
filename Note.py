@@ -88,11 +88,13 @@ class StickyNote:
         # 内容区域
         self.content_frame = tk.Frame(self.root, bg=self.text_bg)
         self.content_frame.grid(row=1, column=0, sticky="nsew")
+        # 启用 Text 组件的撤销功能
         self.text_widget = tk.Text(self.content_frame, wrap="word",
                                    font=("微软雅黑", 11),
                                    fg=self.text_fg, bg=self.text_bg,
                                    borderwidth=0, insertbackground="#FFFFFF",
-                                   relief="flat", padx=10, pady=10)
+                                   relief="flat", padx=10, pady=10,
+                                   undo=True)  # 启用撤销功能
         self.text_widget.pack(fill=tk.BOTH, expand=True)
         self.text_widget.tag_configure("invisible", elide=True)
         self.text_widget.tag_configure("bold", font=("微软雅黑", 11, "bold"), foreground=self.text_fg)
