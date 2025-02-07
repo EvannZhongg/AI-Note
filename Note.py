@@ -348,8 +348,21 @@ class StickyNote:
 
         usage_win = tk.Toplevel(self.root)
         usage_win.title("使用说明")
-        usage_win.geometry("325x400+100+100")
         usage_win.configure(bg=self.text_bg)
+
+        # 计算便签窗口的位置，并将使用说明窗口放在旁边
+        geo_str = self.root.geometry()
+        match = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", geo_str)
+        if match:
+            window_width = int(match.group(1))
+            window_height = int(match.group(2))
+            window_x = int(match.group(3))
+            window_y = int(match.group(4))
+        else:
+            window_x, window_y = 100, 100
+            window_width = 300
+
+        usage_win.geometry(f"325x400+{window_x + window_width + 10}+{window_y}")
 
         # 创建带滚动条的只读文本区域
         frame = tk.Frame(usage_win, bg=self.text_bg)
@@ -421,6 +434,20 @@ class StickyNote:
         settings_win.transient(self.root)
         settings_win.grab_set()
         settings_win.configure(bg=self.text_bg)
+
+        # 计算便签窗口的位置，并将 AI 设置窗口放在旁边
+        geo_str = self.root.geometry()
+        match = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", geo_str)
+        if match:
+            window_width = int(match.group(1))
+            window_height = int(match.group(2))
+            window_x = int(match.group(3))
+            window_y = int(match.group(4))
+        else:
+            window_x, window_y = 100, 100
+            window_width = 300
+
+        settings_win.geometry(f"530x280+{window_x + window_width + 10}+{window_y}")
 
         label_font = ("微软雅黑", 11)
         entry_font = ("微软雅黑", 11)
