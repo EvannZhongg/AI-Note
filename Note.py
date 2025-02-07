@@ -166,6 +166,7 @@ class StickyNote:
         # 定义分隔线样式
         separator_styles = [
             "----------------------------------------------",
+            "****************************************",
             "••••••••••••••••••••••••••••••••••••••••",
             "=========================",
             "......................................................................",
@@ -396,7 +397,7 @@ class StickyNote:
             window_x, window_y = 100, 100
             window_width = 300
 
-        usage_win.geometry(f"325x400+{window_x + window_width + 10}+{window_y}")
+        usage_win.geometry(f"325x400+{window_x + 10}+{window_y}")
 
         # 创建带滚动条的只读文本区域
         frame = tk.Frame(usage_win, bg=self.text_bg)
@@ -481,7 +482,7 @@ class StickyNote:
             window_x, window_y = 100, 100
             window_width = 300
 
-        settings_win.geometry(f"530x280+{window_x + window_width + 10}+{window_y}")
+        settings_win.geometry(f"530x280+{window_x - 50}+{window_y + 30}")
 
         label_font = ("微软雅黑", 11)
         entry_font = ("微软雅黑", 11)
