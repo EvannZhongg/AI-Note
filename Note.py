@@ -14,13 +14,11 @@ import os  # 用于文件操作
 global_command_queue = None
 IMAGE_FOLDER = "sticky_notes_images"
 
-
 def launch_sticky_note(note_id=None, command_queue=None, x=None, y=None):
     global global_command_queue
     global_command_queue = command_queue
-    note = StickyNote(note_id=note_id, x=x, y=y)
+    note = StickyNote(note_id=note_id, x=x, y=y)  # 使用传递的坐标初始化
     note.root.mainloop()
-
 
 def create_new_sticky_note():
     p = multiprocessing.Process(target=launch_sticky_note, args=(None, global_command_queue))
@@ -33,7 +31,7 @@ class StickyNote:
             self.root = tk.Tk()
         else:
             self.root = tk.Toplevel(master)
-        self.root.title("FakeNote")
+        self.root.title("AI Note")
         # self.root.iconbitmap("FakeNote.ico")  # 需要使用 Logo 时启用
         if x is not None and y is not None:
             geometry_str = f"300x400+{x}+{y}"
