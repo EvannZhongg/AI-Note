@@ -149,11 +149,45 @@ class StickyNote:
                                     relief="flat", bd=0)
         self.bullet_btn.pack(side=tk.RIGHT, padx=10, pady=3)
         ToolTip(self.bullet_btn, "项目序号")
+        # 底部工具栏新增分隔线按钮
+        self.separator_btn = tk.Button(self.toolbar, text="─", command=self.show_separator_menu,
+                                       bg=self.header_bg, fg="white", font=button_font,
+                                       relief="flat", bd=0)
+        self.separator_btn.pack(side=tk.RIGHT, padx=10, pady=3)
+        ToolTip(self.separator_btn, "插入分隔线")
+
         # 右键弹出设置菜单，用于配置 AI 参数、prompt 多套设置及使用说明
         self.root.bind("<Button-3>", self.show_context_menu)
         self.root.lift()
         self.root.attributes("-topmost", True)
         self.root.after(100, self._ensure_topmost_state)
+
+    def show_separator_menu(self):
+        menu = tk.Menu(self.root, tearoff=0, bg=self.header_bg, fg="white", font=("Segoe UI", 10))
+
+        # 定义分隔线样式
+        separator_styles = [
+            "----------------------------------------------",
+            "••••••••••••••••••••••••••••••••••••••••",
+            "=========================",
+            "......................................................................",
+            "—————————————————",
+            "//////////////////////////////////////////////"
+        ]
+
+        # 为每种样式添加菜单项，不显示名称，只显示样式
+        for separator in separator_styles:
+            menu.add_command(label=separator, command=lambda s=separator: self.insert_separator(s))
+
+        # 在按钮下方弹出菜单
+        bx = self.separator_btn.winfo_rootx()
+        by = self.separator_btn.winfo_rooty() + self.separator_btn.winfo_height()
+        menu.tk_popup(bx, by)
+
+    def insert_separator(self, separator_style):
+        # 获取当前插入点位置
+        cursor_position = self.text_widget.index(tk.INSERT)
+        self.text_widget.insert(cursor_position, separator_style + "\n")
 
     def _darken_color(self, hexcolor, factor=0.7):
         hexcolor = hexcolor.lstrip('#')
