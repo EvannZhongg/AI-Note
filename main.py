@@ -1,5 +1,4 @@
 import multiprocessing
-import time
 import sys
 import os
 
@@ -11,7 +10,7 @@ def main():
     command_queue = multiprocessing.Queue()
 
     # 第一个便笺
-    p = multiprocessing.Process(target=launch_sticky_note, args=(None, command_queue))
+    p = multiprocessing.Process(target=launch_sticky_note, args=(None, command_queue, 1200, 520))
     p.start()
     processes.append(p)
 
@@ -20,7 +19,7 @@ def main():
             cmd = command_queue.get(timeout=0.5)
             if cmd == "new":
                 # 默认新便笺(无位置)
-                new_p = multiprocessing.Process(target=launch_sticky_note, args=(None, command_queue))
+                new_p = multiprocessing.Process(target=launch_sticky_note, args=(None, command_queue, 100, 100))
                 new_p.start()
                 processes.append(new_p)
 
